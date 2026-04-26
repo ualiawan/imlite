@@ -11,13 +11,15 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterator
-from typing import Union
+from typing import TYPE_CHECKING, Union
+
+if TYPE_CHECKING:
+    from imlite.core.video import Video
 
 import numpy as np
 
-from imlite.utils.path import sorted_frame_paths
-
 from imlite.core.image import Image
+from imlite.utils.path import sorted_frame_paths
 
 log = logging.getLogger(__name__)
 
@@ -402,8 +404,8 @@ class FrameSequence:
 
         if self._source_type == "video":
             assert self._source is not None
-            import imageio.v2 as iio2  # noqa: PLC0415
             import cv2  # noqa: PLC0415
+            import imageio.v2 as iio2  # noqa: PLC0415
 
             try:
                 reader = iio2.get_reader(self._source, plugin="ffmpeg")
