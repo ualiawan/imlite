@@ -136,11 +136,10 @@ def _probe_file(path: str) -> Image | Video:
 
         arr = iio.imread(path)
         if arr is not None:
-            import cv2  # noqa: PLC0415
-
+            arr = arr.astype("uint8")
             if arr.ndim == 3 and arr.shape[2] == 3:
-                arr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
-            return Image.from_numpy(arr.astype("uint8"), color_space="BGR", path=path)
+                arr = arr[..., ::-1].copy()  # RGB \u2192 BGR
+            return Image.from_numpy(arr, color_space="BGR", path=path)
     except Exception:  # noqa: BLE001
         pass
 

@@ -277,6 +277,32 @@ class FrameSequence:
         new_seq._pending_ops.append(lambda img: _flip(img, axis))  # type: ignore[arg-type]
         return new_seq
 
+    def pad(
+        self,
+        top: int = 0,
+        bottom: int = 0,
+        left: int = 0,
+        right: int = 0,
+        color: tuple = (0, 0, 0),
+    ) -> "FrameSequence":
+        """Queue a constant-colour border for every frame.
+
+        Args:
+            top: Pixels to add on the top edge.
+            bottom: Pixels to add on the bottom edge.
+            left: Pixels to add on the left edge.
+            right: Pixels to add on the right edge.
+            color: Fill colour tuple (default black).
+
+        Returns:
+            New :class:`FrameSequence` with the pad queued.
+        """
+        from imlite.ops.geometry import pad as _pad  # noqa: PLC0415
+
+        new_seq = self._clone()
+        new_seq._pending_ops.append(lambda img: _pad(img, top, bottom, left, right, color))  # type: ignore[arg-type]
+        return new_seq
+
     def apply(self, fn: Callable[[Image], Image]) -> "FrameSequence":
         """Queue a custom per-frame function.
 
@@ -404,13 +430,13 @@ class FrameSequence:
 
         if self._source_type == "video":
             assert self._source is not None
-            import cv2  # noqa: PLC0415
             import imageio.v2 as iio2  # noqa: PLC0415
+
+            from imlite.ops.video_io import get_video_info  # noqa: PLC0415
 
             try:
                 reader = iio2.get_reader(self._source, plugin="ffmpeg")
-                meta = reader.get_meta_data()
-                total = int(meta.get("nframes", 0)) or None
+                total = get_video_info(self._source)["frame_count"] or None
                 stop = self._end if self._end is not None else (total or 10**9)
                 indices = range(self._start, stop, self._step)
 
@@ -424,7 +450,7 @@ class FrameSequence:
                         continue
                     # imageio yields RGB -> convert to BGR.
                     if rgb_arr.ndim == 3 and rgb_arr.shape[2] == 3:
-                        bgr = cv2.cvtColor(rgb_arr, cv2.COLOR_RGB2BGR)
+                        bgr = rgb_arr[..., ::-1].copy()
                     else:
                         bgr = rgb_arr
                     yield Image.from_numpy(bgr, color_space="BGR")

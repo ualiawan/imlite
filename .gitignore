@@ -23,6 +23,7 @@ var/
 .installed.cfg
 *.egg
 MANIFEST
+data/
 
 # Virtual environments
 venv/
