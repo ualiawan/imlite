@@ -1,1 +1,1 @@
-"""Core sub-package for imlite"""
+"""Core data model: :class:`Image`, :class:`Video`, :class:`FrameSequence` and ``load()``."""

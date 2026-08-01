@@ -1,15 +1,16 @@
-"""The ``imlite.load()`` smart dispatcher.
+"""The :func:`load` dispatcher - imlite's single entry point.
 
-Inspects the source and returns the appropriate type:
-    Image, Video, or FrameSequence.
+``imlite.load(source)`` inspects what it is given and hands back the right
+object, so callers do not have to choose between ``read_image``,
+``read_video`` and ``read_frames`` up front.
 
+The rules are deliberately boring: the returned type is always predictable
+from the input, and unknown extensions are probed rather than guessed at.
 """
-
-from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Union
+from typing import Any, TypeAlias, Union
 
 import numpy as np
 
@@ -23,76 +24,63 @@ log = logging.getLogger(__name__)
 
 __all__ = ["load"]
 
-# Union type accepted by load()
-_Source = Union[str, Path, np.ndarray, Image, Video, FrameSequence, list]
+#: Anything :func:`load` accepts.
+Source: TypeAlias = Union[str, Path, np.ndarray, Image, Video, FrameSequence, list[Any]]  # noqa: UP007
 
 
-def load(source: _Source) -> Image | Video | FrameSequence:
-    """Load *source* and return the appropriate imlite object.
+def load(source: Source) -> Image | Video | FrameSequence:
+    """Load *source* and return the matching imlite object.
 
-    This is the primary entry point for the fluent API.
+    ======================  ==========================================  ======================
+    Input                   Condition                                   Returns
+    ======================  ==========================================  ======================
+    ``str`` / ``Path``      image extension                             :class:`Image`
+    ``str`` / ``Path``      video extension                             :class:`Video`
+    ``str`` / ``Path``      is a directory                              :class:`FrameSequence`
+    ``list[str]``           image file paths                            :class:`FrameSequence`
+    ``list[ndarray]``       raw arrays                                  :class:`FrameSequence`
+    ``list[Image]``         ``Image`` objects                           :class:`FrameSequence`
+    ``np.ndarray``          2-D or 3-D array                            :class:`Image`
+    ``Image``/``Video``/    already an imlite object                    unchanged
+    ``FrameSequence``
+    ======================  ==========================================  ======================
 
-    Dispatch rules:
-
-    ================  ============================================  =================
-    Input type        Condition                                     Returns
-    ================  ============================================  =================
-    ``str`` / Path    extension in :data:`IMAGE_EXTENSIONS`         :class:`Image`
-    ``str`` / Path    extension in :data:`VIDEO_EXTENSIONS`         :class:`Video`
-    ``str`` / Path    path is a directory                           :class:`FrameSequence`
-    ``list[str]``     items are image file paths                    :class:`FrameSequence`
-    ``list[ndarray]`` items are numpy arrays                        :class:`FrameSequence`
-    ``list[Image]``   items are ``Image`` objects                   :class:`FrameSequence`
-    ``np.ndarray``    2-D or 3-D array                              :class:`Image`
-    :class:`Image`    passthrough                                   :class:`Image`
-    :class:`Video`    passthrough                                   :class:`Video`
-    :class:`FrameSequence` passthrough                              :class:`FrameSequence`
-    ================  ============================================  =================
-
-    If the extension is unrecognised and the path exists, imlite attempts to
-    open it as an image first, then as a video.  An
-    :exc:`~imlite.exceptions.ImliteOpenError` is raised if neither succeeds.
+    A file with an unrecognised extension is probed as an image.  Videos
+    cannot be probed - the ffmpeg backend picks its decoder from the
+    extension - so an exotic video extension raises with instructions rather
+    than returning a :class:`Video` that would fail on first use.
 
     Args:
-        source: The resource to load.  Accepts a file path, directory path,
-            numpy array, or any of the three core imlite types.
+        source: A file path, directory path, numpy array, list of frames, or
+            an existing imlite object.
 
     Returns:
-        :class:`Image`, :class:`Video`, or :class:`FrameSequence`.
+        An :class:`Image`, :class:`Video` or :class:`FrameSequence`.
 
     Raises:
         ImliteOpenError: If the source type cannot be determined.
-        ImliteReadError: If a file path is given but the file cannot be read.
+        ImliteReadError: If a file was identified but could not be read.
 
     Examples:
-        >>> img   = imlite.load("photo.jpg")          # -> Image
-        >>> vid   = imlite.load("clip.mp4")           # -> Video
-        >>> seq   = imlite.load("frames/")            # -> FrameSequence
-        >>> seq2  = imlite.load([img1, img2, img3])   # -> FrameSequence
-        >>> img2  = imlite.load(np.zeros((100,100,3), dtype=np.uint8))
+        >>> img = imlite.load("photo.jpg")            # -> Image
+        >>> vid = imlite.load("clip.mp4")             # -> Video
+        >>> seq = imlite.load("frames/")              # -> FrameSequence
+        >>> seq = imlite.load([img1, img2, img3])     # -> FrameSequence
     """
-    log.debug("load() called with source type: %s", type(source).__name__)
+    log.debug("load() called with %s", type(source).__name__)
 
-    # --- Passthrough: already the right type ---
     if isinstance(source, (Image, Video, FrameSequence)):
-        return source  # type: ignore[return-value]
-
-    # --- numpy array -> Image ---
+        return source
     if isinstance(source, np.ndarray):
         return Image.from_numpy(source)
-
-    # --- list ---
     if isinstance(source, list):
-        return _open_list(source)
-
-    # --- str / Path ---
+        return _load_list(source)
     if isinstance(source, (str, Path)):
-        return _open_path(str(source))
+        return _load_path(str(source))
 
     raise ImliteOpenError(
-        f"Cannot open source of type {type(source).__name__!r}. "
-        "Expected a file path, directory, numpy array, list, "
-        "Image, Video, or FrameSequence."
+        f"Cannot load a {type(source).__name__!r}. Expected a file path, directory, "
+        "numpy array, list of frames, Image, Video or FrameSequence."
     )
 
 
@@ -101,87 +89,77 @@ def load(source: _Source) -> Image | Video | FrameSequence:
 # ---------------------------------------------------------------------------
 
 
-def _open_path(path: str) -> Image | Video | FrameSequence:
-    p = Path(path)
+def _load_path(path: str) -> Image | Video | FrameSequence:
+    """Dispatch a filesystem path to the right imlite type."""
+    location = Path(path)
 
-    if p.is_dir():
-        log.debug("open(): path is directory -> FrameSequence")
+    if location.is_dir():
+        log.debug("load(): %r is a directory -> FrameSequence", path)
         return FrameSequence.from_dir(path)
 
-    ext = p.suffix.lower()
-
     if is_image_file(path):
-        log.debug("open(): recognised image extension %r -> Image", ext)
-        from imlite.ops.io import read_image  # noqa: PLC0415
+        from imlite.ops.io import read_image
 
         return read_image(path)
 
     if is_video_file(path):
-        log.debug("open(): recognised video extension %r -> Video", ext)
+        if not location.exists():
+            raise ImliteOpenError(f"Video file not found: {path!r}")
         return Video(path)
 
-    # Unknown extension - probe the file.
-    if not p.exists():
-        raise ImliteOpenError(f"File not found: {path!r}")
+    if not location.exists():
+        raise ImliteOpenError(
+            f"File not found: {path!r}. "
+            "Check the path, or pass a directory to load a frame sequence."
+        )
 
-    log.debug("open(): unknown extension %r - probing file content", ext)
-    return _probe_file(path)
+    log.debug("load(): unknown extension %r - probing the file", location.suffix)
+    return _probe_image(path)
 
 
-def _probe_file(path: str) -> Image | Video:
-    """Try to open *path* as image then as video; raise if both fail."""
-    # Try image first (faster).
+def _probe_image(path: str) -> Image:
+    """Try to decode a file with an unrecognised extension as an image.
+
+    Only images can be probed.  The ffmpeg backend refuses any path whose
+    extension it does not recognise, so a video with an exotic extension has to
+    be renamed rather than sniffed - the error below says so.
+    """
+    from imlite.ops.io import read_image
+
     try:
-        import imageio.v3 as iio  # noqa: PLC0415
-
-        arr = iio.imread(path)
-        if arr is not None:
-            arr = arr.astype("uint8")
-            if arr.ndim == 3 and arr.shape[2] == 3:
-                arr = arr[..., ::-1].copy()  # RGB \u2192 BGR
-            return Image.from_numpy(arr, color_space="BGR", path=path)
-    except Exception:  # noqa: BLE001
-        pass
-
-    # Try video.
-    try:
-        import imageio.v2 as iio2  # noqa: PLC0415
-
-        reader = iio2.get_reader(path, plugin="ffmpeg")
-        reader.close()
-        return Video(path)
-    except Exception:  # noqa: BLE001
-        pass
+        return read_image(path)
+    except Exception as exc:
+        log.debug("Probe as image failed for %r: %s", path, exc)
 
     raise ImliteOpenError(
-        f"Could not determine the type of {path!r}. "
-        "The file extension is unrecognised and probing as image/video both failed."
+        f"Could not determine what {path!r} is: the extension "
+        f"{Path(path).suffix!r} is not one imlite recognises, and the file could not be "
+        "decoded as an image.\n"
+        "If it is a video, rename it to a known extension (.mp4, .mov, .mkv, ...) - "
+        "the ffmpeg backend selects its decoder by extension and cannot sniff the contents."
     )
 
 
-def _open_list(items: list) -> FrameSequence:
+def _load_list(items: list[Any]) -> FrameSequence:
+    """Turn a list of paths, arrays or images into a ``FrameSequence``."""
     if not items:
         return FrameSequence.from_images([])
 
     first = items[0]
 
-    if isinstance(first, str):
-        # List of file paths - check if they're images
-        if is_image_file(first):
-            frames = []
-            from imlite.ops.io import read_image  # noqa: PLC0415
+    if isinstance(first, (str, Path)):
+        from imlite.ops.io import read_image
 
-            for p in items:
-                frames.append(read_image(p))
-            return FrameSequence.from_images(frames)
-        raise ImliteOpenError(
-            f"List of strings must be image file paths; first item {first!r} "
-            "is not a recognised image format."
-        )
+        if not is_image_file(first):
+            raise ImliteOpenError(
+                f"A list of paths must contain image files; {str(first)!r} is not a "
+                "recognised image format."
+            )
+        return FrameSequence.from_images([read_image(str(item)) for item in items])
 
     if isinstance(first, (np.ndarray, Image)):
         return FrameSequence.from_images(items)
 
     raise ImliteOpenError(
-        f"List items must be str, np.ndarray, or Image; got {type(first).__name__!r}."
+        f"List items must be paths, numpy arrays or Image objects; got {type(first).__name__!r}."
     )
