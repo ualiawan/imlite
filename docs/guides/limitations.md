@@ -212,7 +212,7 @@ what to run - see [Installation](install.md#platforms-with-no-bundled-ffmpeg).
 
 ## See also
 
-- [Roadmap](https://github.com/ualiawan/imlite/blob/main/PLAN.md#11-roadmap) -
-  which of these are planned to change
+- [Roadmap](https://github.com/ualiawan/imlite#roadmap) - which of these are
+  planned to change
 - [Pixel dtypes](dtypes.md) - the full conversion table
 - [Colour operations](color.md) - encodings and round-trip behaviour

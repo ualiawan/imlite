@@ -138,8 +138,7 @@ most often:
 
 ## Roadmap
 
-Tracked in [PLAN.md](PLAN.md#11-roadmap), where each item names the limitation
-it removes.
+Each item below removes one of the limitations above.
 
 **0.2.0**
 
@@ -159,7 +158,8 @@ it removes.
 - [ ] Optional `pillow-simd` backend
 
 **Not planned:** reintroducing OpenCV, a 16-bit data model, content-sniffing
-video files, or a GUI. Reasoning in [PLAN.md](PLAN.md#11-roadmap).
+video files, or a GUI. Each of those would undo something the library is built
+around; see [limitations](docs/guides/limitations.md) for why.
 
 ## Development
 
@@ -179,8 +179,11 @@ mkdocs serve                     # docs on localhost:8000
 ```
 
 Python 3.10+. CI runs the suite on Linux, macOS and Windows across 3.10-3.13.
-Contributor rules are in [PLAN.md](PLAN.md#12-contributor-rules); the
-architecture is in [DESIGN.md](DESIGN.md).
+
+A few house rules for contributions: no OpenCV and no direct `subprocess`
+ffmpeg calls; every public operation must accept an `Image` **and** an
+`ndarray` and be tested on both paths; wrap backend exceptions in an imlite
+one; and keep `import imlite` cheap.
 
 ## License
 

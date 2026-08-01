@@ -85,6 +85,8 @@ dmypy.json
 
 # Local working notes (not part of the published project)
 STATUS.md
+DESIGN.md
+PLAN.md
 
 # MkDocs build output
 site/
