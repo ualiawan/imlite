@@ -82,3 +82,9 @@ dmypy.json
 
 # logs
 *.log
+
+# Local working notes (not part of the published project)
+STATUS.md
+
+# MkDocs build output
+site/
