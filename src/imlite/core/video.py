@@ -1,16 +1,25 @@
-"""The ``Video`` class - a handle to a video file or a pending encode.
+"""The :class:`Video` class - a handle to a video file, or to a pending encode.
 
-- Constructed from a file path: metadata is loaded lazily on first access.
-- Constructed from a ``FrameSequence`` via ``from_frames()``: no file exists
-  yet; encoding happens when ``.save()`` is called.
-- Does NOT load any frames into memory on construction.
+A ``Video`` is one of two things:
+
+- **File-backed** (``Video("clip.mp4")``): metadata is read lazily on first
+  access and then cached.  No frames are ever loaded on construction.
+- **Pending** (``Video.from_frames(seq, fps)``): no file exists yet; the
+  frames are encoded when :meth:`save` is called.
+
+Either way the whole pipeline stays streaming - a two-hour 4K video is
+processed one frame at a time.
 """
 
+# PEP 563: methods return Video, and FrameSequence is a
+# TYPE_CHECKING-only import. Do not remove.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, Any
 
-from imlite.core.sequence import FrameSequence
+if TYPE_CHECKING:  # pragma: no cover
+    from imlite.core.sequence import FrameSequence
 
 log = logging.getLogger(__name__)
 
@@ -18,22 +27,27 @@ __all__ = ["Video"]
 
 
 class Video:
-    """A video file handle or a pending video encode.
+    """A video file handle, or a video waiting to be encoded.
 
     Args:
-        path: Path to an existing video file.  Pass ``None`` only when
-            constructing via :meth:`from_frames`.
+        path: Path to an existing video file.
 
     Note:
-        Metadata properties (``fps``, ``frame_count``, etc.) are loaded
-        lazily from the file on first access - no I/O on construction.
+        Metadata properties (:attr:`fps`, :attr:`frame_count`, ...) hit the
+        file on first access and are cached from then on.
+
+    Example:
+        >>> vid = imlite.load("clip.mp4")
+        >>> vid.fps, vid.frame_count  # doctest: +SKIP
+        (25.0, 300)
+        >>> vid.extract_frames(step=2).resize(640, 360).merge(12.5).save("small.mp4")
     """
 
-    __slots__ = ("_path", "_meta", "_pending_frames", "_pending_fps", "_pending_codec")
+    __slots__ = ("_meta", "_path", "_pending_codec", "_pending_fps", "_pending_frames")
 
     def __init__(self, path: str) -> None:
         self._path: str = str(path)
-        self._meta: dict | None = None
+        self._meta: dict[str, Any] | None = None
         self._pending_frames: FrameSequence | None = None
         self._pending_fps: float = 30.0
         self._pending_codec: str = "libx264"
@@ -45,49 +59,46 @@ class Video:
     @classmethod
     def from_frames(
         cls,
-        frames: "FrameSequence",
+        frames: FrameSequence,
         fps: float = 30.0,
         codec: str = "libx264",
-    ) -> "Video":
+    ) -> Video:
         """Create a ``Video`` backed by a :class:`~imlite.core.sequence.FrameSequence`.
 
-        The video is **not** encoded until :meth:`save` is called.
+        Nothing is encoded until :meth:`save` is called, so the source sequence
+        may still be lazy at this point.
 
         Args:
-            frames: Source frames (may be lazy - no frames decoded yet).
-            fps: Frame rate for the output video.
-            codec: FFmpeg codec (default ``"libx264"``).
+            frames: Source frames.
+            fps: Frame rate for the output.
+            codec: FFmpeg codec name (default ``"libx264"``).
 
         Returns:
-            A new :class:`Video` with no file path yet.
+            A new pending :class:`Video` with no file path yet.
 
         Example:
-            >>> video = Video.from_frames(my_sequence, fps=25)
-            >>> video.save("output.mp4")
+            >>> Video.from_frames(my_sequence, fps=25).save("out.mp4")
         """
-        # Placeholder path - will be set by save().
-        vid = cls.__new__(cls)
-        vid._path = ""
-        vid._meta = None
-        vid._pending_frames = frames
-        vid._pending_fps = fps
-        vid._pending_codec = codec
-        return vid
+        video = cls.__new__(cls)
+        video._path = ""
+        video._meta = None
+        video._pending_frames = frames
+        video._pending_fps = fps
+        video._pending_codec = codec
+        return video
 
     # ------------------------------------------------------------------
-    # Properties  (lazy-loaded from file)
+    # Properties
     # ------------------------------------------------------------------
 
-    def _load_meta(self) -> dict:
-        if self._meta is None:
-            from imlite.ops.video_io import get_video_info  # noqa: PLC0415
-
-            self._meta = get_video_info(self._path)
-        return self._meta
+    @property
+    def is_pending(self) -> bool:
+        """``True`` when this video has not been encoded to disk yet."""
+        return self._pending_frames is not None
 
     @property
     def path(self) -> str:
-        """File path (empty string if not yet saved)."""
+        """File path, or an empty string for a video that is still pending."""
         return self._path
 
     @property
@@ -95,49 +106,59 @@ class Video:
         """Frames per second."""
         if self._pending_frames is not None:
             return self._pending_fps
-        return float(self._load_meta().get("fps", 0.0))
+        return float(self._load_meta()["fps"])
 
     @property
     def frame_count(self) -> int:
         """Total number of frames."""
         if self._pending_frames is not None:
             return len(self._pending_frames)
-        return int(self._load_meta().get("frame_count", 0))
+        return int(self._load_meta()["frame_count"])
 
     @property
     def duration(self) -> float:
         """Duration in seconds."""
         if self._pending_frames is not None:
-            fc = self.frame_count
-            fps = self._pending_fps
-            return fc / fps if fps else 0.0
-        return float(self._load_meta().get("duration", 0.0))
+            return self.frame_count / self._pending_fps if self._pending_fps else 0.0
+        return float(self._load_meta()["duration"])
 
     @property
     def width(self) -> int:
-        """Frame width in pixels."""
-        return int(self._load_meta().get("width", 0))
+        """Frame width in pixels.
+
+        Raises:
+            ValueError: If this video is still pending - the size is not known
+                until the first frame has been produced.
+        """
+        return int(self._require_file_meta("width")["width"])
 
     @property
     def height(self) -> int:
-        """Frame height in pixels."""
-        return int(self._load_meta().get("height", 0))
+        """Frame height in pixels.
+
+        Raises:
+            ValueError: If this video is still pending.
+        """
+        return int(self._require_file_meta("height")["height"])
 
     @property
     def codec(self) -> str:
-        """Codec string (e.g. ``"h264"``)."""
+        """Codec name, e.g. ``"h264"``."""
         if self._pending_frames is not None:
             return self._pending_codec
-        return str(self._load_meta().get("codec", ""))
+        return str(self._load_meta()["codec"])
 
     @property
-    def info(self) -> dict:
-        """All metadata as a flat dictionary.
+    def info(self) -> dict[str, Any]:
+        """All file metadata as a flat dict.
 
         Keys: ``path``, ``fps``, ``frame_count``, ``duration``, ``width``,
         ``height``, ``codec``, ``size_bytes``.
+
+        Raises:
+            ValueError: If this video is still pending.
         """
-        return self._load_meta()
+        return self._require_file_meta("info")
 
     # ------------------------------------------------------------------
     # Operations
@@ -151,25 +172,37 @@ class Video:
         end: int | None = None,
         fmt: str = "png",
         show_progress: bool = True,
-    ) -> "FrameSequence":
-        """Extract frames from this video file.
+    ) -> FrameSequence:
+        """Extract frames from this video.
+
+        With no *output_dir* the result is lazy - nothing is decoded until you
+        iterate it.
 
         Args:
-            output_dir: If given, frames are saved here as image files.
-                If ``None``, frames are returned in-memory.
+            output_dir: Directory to write frame images into, or ``None``
+                (default) to stream frames on demand without writing anything.
             step: Take every *step*-th frame.
             start: First frame index (inclusive).
-            end: Last frame index (exclusive).  ``None`` = until end.
-            fmt: Image format for saved files (e.g. ``"png"``).
-            show_progress: Show a tqdm progress bar.
+            end: Index to stop before (exclusive), or ``None`` for all.
+            fmt: Image format for written frames, e.g. ``"png"``.
+            show_progress: Show a progress bar while writing frames.
 
         Returns:
             A :class:`~imlite.core.sequence.FrameSequence`.
 
+        Raises:
+            ValueError: If this video is still pending.
+
         Example:
-            >>> seq = imlite.open("video.mp4").extract_frames(step=2)
+            >>> seq = imlite.load("clip.mp4").extract_frames(step=2)
         """
-        from imlite.ops.video_io import extract_frames as _extract  # noqa: PLC0415
+        if self._pending_frames is not None:
+            raise ValueError(
+                "This Video has not been encoded yet, so there are no frames to extract. "
+                "Use the FrameSequence you built it from, or call save() first."
+            )
+
+        from imlite.ops.video_io import extract_frames as _extract
 
         return _extract(
             self._path,
@@ -186,55 +219,85 @@ class Video:
         path: str,
         fps: float | None = None,
         codec: str | None = None,
+        macro_block_size: int = 2,
         show_progress: bool = True,
-    ) -> "Video":
+    ) -> Video:
         """Write this video to disk.
 
-        If the video was created via :meth:`from_frames`, frames are encoded
-        now (lazy decoding + transforms happen here).
-
-        If the video was opened from a file this is a no-op unless a new
-        *path* is provided (copy / re-encode not yet supported - raises
-        ``NotImplementedError``).
+        For a pending video, the frames are decoded, transformed and encoded
+        now - one at a time.  For a file-backed video, this re-encodes the file
+        at *path*, which is how you transcode or change frame rate.
 
         Args:
             path: Destination file path.
-            fps: Frame rate override.  Defaults to the value set at
-                construction.
-            codec: Codec override.
-            show_progress: Show a tqdm progress bar during encoding.
+            fps: Frame-rate override.  Defaults to the pending rate, or the
+                source rate when re-encoding.
+            codec: Codec override (default ``"libx264"``).
+            macro_block_size: Round frame dimensions up to a multiple of this.
+                The default ``2`` satisfies ``yuv420p`` without inflating the
+                size - see :func:`~imlite.ops.video_io.merge_frames`.
+            show_progress: Show a progress bar while encoding.
 
         Returns:
-            ``self`` with ``path`` updated to *path*.
+            ``self``, with :attr:`path` updated to *path*.
+
+        Raises:
+            ImliteWriteError: If the output cannot be written.
+            ImliteFFmpegError: If no ffmpeg binary is available.
 
         Example:
             >>> seq.merge(fps=25).save("out.mp4")
+            >>> imlite.load("in.mov").save("out.mp4")  # transcode
         """
-        from imlite.ops.video_io import merge_frames  # noqa: PLC0415
+        from imlite.ops.video_io import merge_frames
 
         if self._pending_frames is not None:
+            source: FrameSequence = self._pending_frames
             out_fps = fps if fps is not None else self._pending_fps
             out_codec = codec if codec is not None else self._pending_codec
-            merge_frames(
-                self._pending_frames,
-                output_path=str(path),
-                fps=out_fps,
-                codec=out_codec,
-                show_progress=show_progress,
-            )
-            self._path = str(path)
-            self._pending_frames = None
-            self._meta = None  # invalidate cached metadata
-            return self
+        else:
+            if str(path) == self._path:
+                log.debug("save() called with the source path - nothing to do.")
+                return self
+            source = self.extract_frames()
+            out_fps = fps if fps is not None else (self.fps or 30.0)
+            out_codec = codec if codec is not None else "libx264"
+            log.info("Re-encoding %s -> %s", self._path, path)
 
-        if str(path) == self._path:
-            log.debug("save() called with same path - nothing to do.")
-            return self
-
-        raise NotImplementedError(
-            "Re-encoding an existing video file is not yet supported. "
-            "Use extract_frames() -> transform -> merge() -> save() instead."
+        merge_frames(
+            source,
+            output_path=str(path),
+            fps=out_fps,
+            codec=out_codec,
+            macro_block_size=macro_block_size,
+            show_progress=show_progress,
         )
+
+        self._path = str(path)
+        self._pending_frames = None
+        self._meta = None  # the file changed; drop cached metadata
+        return self
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _load_meta(self) -> dict[str, Any]:
+        """Read and cache this file's metadata."""
+        if self._meta is None:
+            from imlite.ops.video_io import get_video_info
+
+            self._meta = get_video_info(self._path)
+        return self._meta
+
+    def _require_file_meta(self, attribute: str) -> dict[str, Any]:
+        """Return file metadata, refusing when this video has not been encoded yet."""
+        if self._pending_frames is not None:
+            raise ValueError(
+                f"'{attribute}' is not known for a Video that has not been encoded yet. "
+                "Call save() first, or inspect the source frames directly."
+            )
+        return self._load_meta()
 
     # ------------------------------------------------------------------
     # Dunder methods
@@ -243,8 +306,7 @@ class Video:
     def __repr__(self) -> str:
         if self._pending_frames is not None:
             return (
-                f"Video(pending, fps={self._pending_fps}, "
-                f"codec={self._pending_codec!r}, "
+                f"Video(pending, fps={self._pending_fps}, codec={self._pending_codec!r}, "
                 f"frames={len(self._pending_frames)})"
             )
         return f"Video(path={self._path!r})"

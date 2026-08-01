@@ -1,60 +1,67 @@
-"""The ``FrameSequence`` class - an ordered, iterable collection of frames.
+"""The :class:`FrameSequence` class - an ordered, iterable collection of frames.
 
-- Can be **lazy** (backed by a video file; frames decoded on demand) or
-  **eager** (backed by an in-memory list of ``Image`` objects).
-- Transforms (``rotate``, ``crop``, …) are **deferred** - stored as lambdas
-  in ``_pending_ops`` and applied frame-by-frame during iteration.
-- Peak memory usage is O(1) regardless of sequence length.
+A sequence is either **lazy** (backed by a video file or a directory of
+images, decoding one frame at a time) or **eager** (backed by a list already in
+memory).  Either way it yields :class:`~imlite.core.image.Image` objects.
+
+Transforms are **deferred**.  ``seq.resize(640, 360).flip("h")`` queues two
+functions and returns immediately; they run per frame during iteration.  Peak
+memory therefore stays at one frame no matter how long the video is::
+
+    imlite.load("4k-2hour.mp4").extract_frames(step=5).resize(640, 360).merge(25).save("out.mp4")
 """
 
+# PEP 563: methods return FrameSequence, and merge() annotates Video,
+# which is a TYPE_CHECKING-only import. Do not remove.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterator
-from typing import TYPE_CHECKING, Union
-
-if TYPE_CHECKING:
-    from imlite.core.video import Video
+from collections.abc import Callable, Iterator, Sequence
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
 from imlite.core.image import Image
 from imlite.utils.path import sorted_frame_paths
 
+if TYPE_CHECKING:  # pragma: no cover
+    from imlite.core.video import Video
+
 log = logging.getLogger(__name__)
 
 __all__ = ["FrameSequence"]
 
-# Type alias for the internal source
-_Source = Union[str, list]  # str = video path or directory; list = eager frames
+SourceType = Literal["video", "dir", "list"]
+FlipAxis = Literal["h", "horizontal", "v", "vertical", "both"]
 
 
 class FrameSequence:
     """An ordered, iterable collection of image frames.
 
-    Frames are always yielded as :class:`~imlite.core.image.Image` objects.
-
-    Construct via the class methods rather than ``__init__`` directly:
+    Build one with a class method rather than calling ``FrameSequence()``:
 
     - :meth:`from_video` - lazy stream from a video file.
     - :meth:`from_dir` - lazy stream from a directory of image files.
-    - :meth:`from_images` - eager list of ``Image`` or ``np.ndarray``.
+    - :meth:`from_images` - eager list of ``Image`` or ``np.ndarray`` frames.
+
+    Example:
+        >>> seq = imlite.load("clip.mp4").extract_frames(step=2)
+        >>> seq.resize(640, 360).merge(fps=25).save("small.mp4")
     """
 
     __slots__ = (
-        "_source",
-        "_source_type",  # "video" | "dir" | "list"
-        "_step",
-        "_start",
+        "_eager_frames",
         "_end",
         "_pending_ops",
-        "_eager_frames",  # populated by to_list() or from_images()
+        "_source",
+        "_source_type",
+        "_start",
+        "_step",
     )
 
     def __init__(self) -> None:
-        # Use class methods for construction.
         self._source: str | None = None
-        self._source_type: str = "list"
+        self._source_type: SourceType = "list"
         self._step: int = 1
         self._start: int = 0
         self._end: int | None = None
@@ -72,21 +79,28 @@ class FrameSequence:
         step: int = 1,
         start: int = 0,
         end: int | None = None,
-    ) -> "FrameSequence":
-        """Create a lazy ``FrameSequence`` backed by a video file.
+    ) -> FrameSequence:
+        """Create a lazy sequence backed by a video file.
 
-        Frames are decoded one at a time during iteration - no frames are
-        loaded into memory on construction.
+        No frames are decoded until the sequence is iterated.
 
         Args:
             path: Path to the video file.
             step: Take every *step*-th frame.
             start: First frame index (inclusive, 0-based).
-            end: Last frame index (exclusive).  ``None`` = until end.
+            end: Index to stop before (exclusive), or ``None`` for the whole file.
 
         Returns:
             A new lazy :class:`FrameSequence`.
+
+        Raises:
+            ValueError: If *step* is not positive or *start* is negative.
         """
+        if step < 1:
+            raise ValueError(f"'step' must be >= 1, got {step}.")
+        if start < 0:
+            raise ValueError(f"'start' must be >= 0, got {start}.")
+
         seq = cls()
         seq._source = str(path)
         seq._source_type = "video"
@@ -96,13 +110,14 @@ class FrameSequence:
         return seq
 
     @classmethod
-    def from_dir(cls, directory: str) -> "FrameSequence":
-        """Create a lazy ``FrameSequence`` backed by a directory of images.
+    def from_dir(cls, directory: str) -> FrameSequence:
+        """Create a lazy sequence backed by a directory of image files.
 
-        Image files are discovered in natural sort order.
+        Files are discovered in natural sort order, so ``frame_2.png`` comes
+        before ``frame_10.png``.
 
         Args:
-            directory: Path to a directory containing image files.
+            directory: Directory containing image files.
 
         Returns:
             A new lazy :class:`FrameSequence`.
@@ -113,34 +128,33 @@ class FrameSequence:
         return seq
 
     @classmethod
-    def from_images(
-        cls,
-        images: list,
-    ) -> "FrameSequence":
-        """Create an eager ``FrameSequence`` from a list of frames.
+    def from_images(cls, images: Sequence[Image | np.ndarray]) -> FrameSequence:
+        """Create an eager sequence from frames already in memory.
 
         Args:
-            images: A list of :class:`~imlite.core.image.Image` objects or
-                ``np.ndarray`` arrays.  Arrays are wrapped in ``Image``
-                automatically.
+            images: :class:`~imlite.core.image.Image` objects or ``np.ndarray``
+                arrays.  Arrays are wrapped automatically and assumed to be BGR.
 
         Returns:
             A new eager :class:`FrameSequence`.
-        """
-        from imlite.core.image import Image  # noqa: PLC0415
 
-        seq = cls()
-        seq._source_type = "list"
+        Raises:
+            TypeError: If any item is neither an ``Image`` nor an ``np.ndarray``.
+        """
         wrapped: list[Image] = []
-        for item in images:
+        for position, item in enumerate(images):
             if isinstance(item, Image):
                 wrapped.append(item)
             elif isinstance(item, np.ndarray):
                 wrapped.append(Image.from_numpy(item))
             else:
                 raise TypeError(
-                    f"from_images() expects Image or np.ndarray, got {type(item).__name__!r}."
+                    f"from_images() expects Image or np.ndarray frames; "
+                    f"item {position} is {type(item).__name__!r}."
                 )
+
+        seq = cls()
+        seq._source_type = "list"
         seq._eager_frames = wrapped
         return seq
 
@@ -149,64 +163,82 @@ class FrameSequence:
     # ------------------------------------------------------------------
 
     def __len__(self) -> int:
-        """Return the number of frames.
-
-        For lazy sources this is computed from metadata (video) or directory
-        listing - no frames are decoded.
-        """
+        """Return the number of frames, without decoding any of them."""
         if self._source_type == "list":
             return len(self._eager_frames or [])
 
         if self._source_type == "dir":
-            assert self._source is not None
-            return len(sorted_frame_paths(self._source))
+            return len(sorted_frame_paths(self._require_source()))
 
-        if self._source_type == "video":
-            from imlite.ops.video_io import get_video_info  # noqa: PLC0415
+        from imlite.ops.video_io import get_video_info
 
-            assert self._source is not None
-            info = get_video_info(self._source)
-            total = info["frame_count"]
-            stop = self._end if self._end is not None else total
-            return max(0, len(range(self._start, min(stop, total), self._step)))
-
-        return 0
+        total = int(get_video_info(self._require_source())["frame_count"])
+        stop = total if self._end is None else min(self._end, total)
+        return max(0, len(range(self._start, stop, self._step)))
 
     def __iter__(self) -> Iterator[Image]:
-        """Yield frames one at a time, applying any pending transforms."""
+        """Yield frames one at a time, applying any queued transforms."""
         for frame in self._iter_source():
+            transformed = frame
             for op in self._pending_ops:
-                frame = op(frame)
-            yield frame
+                transformed = op(transformed)
+            yield transformed
 
-    def __getitem__(self, idx: int | slice) -> "Image | FrameSequence":
+    def __getitem__(self, index: int | slice) -> Image | FrameSequence:
         """Access frames by index or slice.
 
-        - Integer index -> :class:`~imlite.core.image.Image`.
-        - Slice -> new :class:`FrameSequence` (eager, pending ops applied).
+        An integer index streams only as far as that frame instead of
+        materialising the whole sequence, so ``seq[0]`` on a two-hour video
+        decodes one frame.  Negative indices and slices do need the length, and
+        for a video source that means a full pass.
+
+        Args:
+            index: Integer frame index (negative counts from the end) or a slice.
+
+        Returns:
+            An :class:`~imlite.core.image.Image` for an integer index, or a new
+            eager :class:`FrameSequence` for a slice.
+
+        Raises:
+            IndexError: If an integer index is out of range.
+            TypeError: If *index* is neither an ``int`` nor a ``slice``.
         """
-        if isinstance(idx, int):
-            frames = self.to_list()
-            return frames[idx]
-        # Slice -> materialise then re-wrap.
-        frames = self.to_list()
-        return FrameSequence.from_images(frames[idx])
+        if isinstance(index, slice):
+            return FrameSequence.from_images(self.to_list()[index])
+
+        if not isinstance(index, (int, np.integer)):
+            raise TypeError(
+                f"FrameSequence indices must be integers or slices, got {type(index).__name__!r}."
+            )
+
+        position = int(index)
+        if position < 0:
+            position += len(self)
+            if position < 0:
+                raise IndexError(f"Frame index {index} is out of range.")
+
+        for current, frame in enumerate(self):
+            if current == position:
+                return frame
+        raise IndexError(f"Frame index {index} is out of range.")
 
     def __repr__(self) -> str:
         try:
-            n = len(self)
-        except Exception:  # noqa: BLE001
-            n = "?"
-        src = self._source or "in-memory"
-        ops = len(self._pending_ops)
-        return f"FrameSequence(source={src!r}, frames={n}, pending_ops={ops})"
+            count: int | str = len(self)
+        except Exception:
+            count = "?"
+        source = self._source or "in-memory"
+        return (
+            f"FrameSequence(source={source!r}, frames={count}, "
+            f"pending_ops={len(self._pending_ops)})"
+        )
 
     # ------------------------------------------------------------------
-    # Batch transforms  (deferred - ops queued, not executed yet)
+    # Deferred transforms - queued now, applied during iteration
     # ------------------------------------------------------------------
 
-    def crop(self, x: int, y: int, width: int, height: int) -> "FrameSequence":
-        """Queue a crop transform for every frame.
+    def crop(self, x: int, y: int, width: int, height: int) -> FrameSequence:
+        """Queue a crop for every frame.
 
         Args:
             x: Left edge of the crop box.
@@ -215,67 +247,69 @@ class FrameSequence:
             height: Crop height in pixels.
 
         Returns:
-            New :class:`FrameSequence` with the crop queued.
+            A new :class:`FrameSequence` with the crop queued.
         """
-        from imlite.ops.geometry import crop as _crop  # noqa: PLC0415
+        return self.apply(lambda img: img.crop(x, y, width, height))
 
-        new_seq = self._clone()
-        new_seq._pending_ops.append(lambda img: _crop(img, x, y, width, height))  # type: ignore[arg-type]
-        return new_seq
-
-    def rotate(self, angle: float, expand: bool = True) -> "FrameSequence":
-        """Queue a rotation transform for every frame.
+    def rotate(self, angle: float, expand: bool = True) -> FrameSequence:
+        """Queue a rotation for every frame.
 
         Args:
-            angle: Rotation angle in degrees (counter-clockwise).
-            expand: Expand canvas to fit (default ``True``).
+            angle: Rotation angle in degrees, counter-clockwise.
+            expand: Grow the canvas to fit the rotated frame (default).
 
         Returns:
-            New :class:`FrameSequence` with the rotation queued.
+            A new :class:`FrameSequence` with the rotation queued.
         """
-        from imlite.ops.geometry import rotate as _rotate  # noqa: PLC0415
-
-        new_seq = self._clone()
-        new_seq._pending_ops.append(lambda img: _rotate(img, angle, expand))  # type: ignore[arg-type]
-        return new_seq
+        return self.apply(lambda img: img.rotate(angle, expand))
 
     def resize(
         self,
         width: int | None = None,
         height: int | None = None,
         keep_aspect: bool = False,
-    ) -> "FrameSequence":
-        """Queue a resize transform for every frame.
+        resample: str = "auto",
+    ) -> FrameSequence:
+        """Queue a resize for every frame.
 
         Args:
             width: Target width, or ``None`` to infer.
             height: Target height, or ``None`` to infer.
-            keep_aspect: Preserve aspect ratio.
+            keep_aspect: Fit inside the target box without distorting.
+            resample: Filter name - see :func:`imlite.resize`.
 
         Returns:
-            New :class:`FrameSequence` with the resize queued.
+            A new :class:`FrameSequence` with the resize queued.
+
+        Note:
+            Video encoders need every frame to be the same size.  With
+            ``keep_aspect=True`` and mixed input sizes, follow the resize with
+            :meth:`pad` before :meth:`merge`.
         """
-        from imlite.ops.geometry import resize as _resize  # noqa: PLC0415
+        return self.apply(lambda img: img.resize(width, height, keep_aspect, resample))
 
-        new_seq = self._clone()
-        new_seq._pending_ops.append(lambda img: _resize(img, width, height, keep_aspect))  # type: ignore[arg-type]
-        return new_seq
-
-    def flip(self, axis: str = "h") -> "FrameSequence":
-        """Queue a flip transform for every frame.
+    def thumbnail(self, size: int, resample: str = "auto") -> FrameSequence:
+        """Queue a thumbnail scale for every frame.
 
         Args:
-            axis: ``"h"`` / ``"horizontal"``, ``"v"`` / ``"vertical"``,
-                or ``"both"``.
+            size: Length of the longest side, in pixels.
+            resample: Filter name - see :func:`imlite.resize`.
 
         Returns:
-            New :class:`FrameSequence` with the flip queued.
+            A new :class:`FrameSequence` with the scale queued.
         """
-        from imlite.ops.geometry import flip as _flip  # noqa: PLC0415
+        return self.apply(lambda img: img.thumbnail(size, resample))
 
-        new_seq = self._clone()
-        new_seq._pending_ops.append(lambda img: _flip(img, axis))  # type: ignore[arg-type]
-        return new_seq
+    def flip(self, axis: FlipAxis = "h") -> FrameSequence:
+        """Queue a flip for every frame.
+
+        Args:
+            axis: ``"h"``/``"horizontal"``, ``"v"``/``"vertical"`` or ``"both"``.
+
+        Returns:
+            A new :class:`FrameSequence` with the flip queued.
+        """
+        return self.apply(lambda img: img.flip(axis))
 
     def pad(
         self,
@@ -283,8 +317,8 @@ class FrameSequence:
         bottom: int = 0,
         left: int = 0,
         right: int = 0,
-        color: tuple = (0, 0, 0),
-    ) -> "FrameSequence":
+        color: int | Sequence[int] = (0, 0, 0),
+    ) -> FrameSequence:
         """Queue a constant-colour border for every frame.
 
         Args:
@@ -292,29 +326,86 @@ class FrameSequence:
             bottom: Pixels to add on the bottom edge.
             left: Pixels to add on the left edge.
             right: Pixels to add on the right edge.
-            color: Fill colour tuple (default black).
+            color: Fill colour in each frame's current colour space.
 
         Returns:
-            New :class:`FrameSequence` with the pad queued.
+            A new :class:`FrameSequence` with the padding queued.
         """
-        from imlite.ops.geometry import pad as _pad  # noqa: PLC0415
+        return self.apply(lambda img: img.pad(top, bottom, left, right, color))
 
-        new_seq = self._clone()
-        new_seq._pending_ops.append(lambda img: _pad(img, top, bottom, left, right, color))  # type: ignore[arg-type]
-        return new_seq
-
-    def apply(self, fn: Callable[[Image], Image]) -> "FrameSequence":
-        """Queue a custom per-frame function.
+    def blur(self, radius: float = 2.0) -> FrameSequence:
+        """Queue a Gaussian blur for every frame.
 
         Args:
-            fn: A callable that accepts an :class:`~imlite.core.image.Image`
-                and returns a transformed :class:`~imlite.core.image.Image`.
+            radius: Standard deviation of the Gaussian kernel, in pixels.
 
         Returns:
-            New :class:`FrameSequence` with *fn* queued.
+            A new :class:`FrameSequence` with the blur queued.
+        """
+        return self.apply(lambda img: img.blur(radius))
+
+    def brightness(self, factor: float = 1.0) -> FrameSequence:
+        """Queue a brightness change for every frame.
+
+        Args:
+            factor: Multiplier applied to every channel.
+
+        Returns:
+            A new :class:`FrameSequence` with the adjustment queued.
+        """
+        return self.apply(lambda img: img.brightness(factor))
+
+    def contrast(self, factor: float = 1.0) -> FrameSequence:
+        """Queue a contrast change for every frame.
+
+        Args:
+            factor: Contrast multiplier.
+
+        Returns:
+            A new :class:`FrameSequence` with the adjustment queued.
+        """
+        return self.apply(lambda img: img.contrast(factor))
+
+    def to_gray(self) -> FrameSequence:
+        """Queue a grayscale conversion for every frame.
+
+        Returns:
+            A new :class:`FrameSequence` with the conversion queued.
+        """
+        return self.apply(lambda img: img.to_gray())
+
+    def to_rgb(self) -> FrameSequence:
+        """Queue an RGB conversion for every frame.
+
+        Returns:
+            A new :class:`FrameSequence` with the conversion queued.
+
+        Note:
+            :meth:`merge` handles colour order for you, so this is only needed
+            when you consume the frames yourself.
+        """
+        return self.apply(lambda img: img.to_rgb())
+
+    def to_bgr(self) -> FrameSequence:
+        """Queue a BGR conversion for every frame.
+
+        Returns:
+            A new :class:`FrameSequence` with the conversion queued.
+        """
+        return self.apply(lambda img: img.to_bgr())
+
+    def apply(self, fn: Callable[[Image], Image]) -> FrameSequence:
+        """Queue an arbitrary per-frame function.
+
+        Args:
+            fn: A callable taking an :class:`~imlite.core.image.Image` and
+                returning a transformed one.
+
+        Returns:
+            A new :class:`FrameSequence` with *fn* queued.
 
         Example:
-            >>> seq.apply(lambda img: img.to_gray())
+            >>> seq.apply(lambda img: img.to_gray().threshold(180))
         """
         new_seq = self._clone()
         new_seq._pending_ops.append(fn)
@@ -331,65 +422,72 @@ class FrameSequence:
         prefix: str = "frame",
         zero_pad: int = 5,
         show_progress: bool = True,
-    ) -> None:
-        """Write all frames to *output_dir* as image files.
+    ) -> FrameSequence:
+        """Write every frame to *output_dir* as an image file.
 
-        Pending transforms are applied during this call.
+        Queued transforms are applied as frames are written.
 
         Args:
-            output_dir: Directory to write frames into (created if needed).
-            fmt: Image format (e.g. ``"png"``, ``"jpg"``).
-            prefix: Filename prefix (e.g. ``"frame"`` -> ``"frame_00001.png"``).
-            zero_pad: Number of digits for the zero-padded index.
-            show_progress: Show a tqdm progress bar.
+            output_dir: Directory to write into; created if missing.
+            fmt: Image format, e.g. ``"png"`` or ``"jpg"``.
+            prefix: Filename prefix, so ``"frame"`` gives ``frame_00001.png``.
+            zero_pad: Number of digits in the zero-padded index.
+            show_progress: Show a progress bar.
+
+        Returns:
+            A new :class:`FrameSequence` backed by *output_dir*, so writing can
+            sit mid-chain.
 
         Example:
-            >>> seq.save_frames("frames/", fmt="jpg")
+            >>> imlite.load("clip.mp4").extract_frames(step=5).save_frames("frames/")
         """
-        from imlite.ops.io import write_image  # noqa: PLC0415
-        from imlite.utils.log import progress  # noqa: PLC0415
-        from imlite.utils.path import ensure_dir  # noqa: PLC0415
+        from imlite.ops.io import write_image
+        from imlite.utils.log import progress
+        from imlite.utils.path import ensure_dir
 
         ensure_dir(output_dir)
-        total = len(self) if hasattr(self, "__len__") else None
+        total = self._safe_len()
         log.info("Saving frames to %s (fmt=%s)", output_dir, fmt)
 
-        for i, frame in enumerate(
-            progress(self, desc="Saving frames", total=total, unit="frame", show=show_progress)
+        written = 0
+        for frame in progress(
+            self, desc="Saving frames", total=total, unit="frame", show=show_progress
         ):
-            dest = f"{output_dir}/{prefix}_{i:0{zero_pad}d}.{fmt}"
-            write_image(frame, dest)
+            write_image(frame, f"{output_dir}/{prefix}_{written:0{zero_pad}d}.{fmt}")
+            written += 1
 
-        log.info("Done. %d frames saved.", i + 1 if total else "?")
+        log.info("Done. %d frames saved to %s", written, output_dir)
+        return FrameSequence.from_dir(str(output_dir))
 
-    def merge(self, fps: float = 30.0, codec: str = "libx264") -> "Video":
+    def merge(self, fps: float = 30.0, codec: str = "libx264") -> Video:
         """Assemble this sequence into a :class:`~imlite.core.video.Video`.
 
-        The video is **not** written to disk yet - call ``.save("out.mp4")``
-        on the returned :class:`~imlite.core.video.Video` to encode it.
+        Nothing is encoded yet - call ``.save("out.mp4")`` on the result.
+        Frames are decoded and transformed during that call, one at a time.
 
         Args:
             fps: Output frame rate.
             codec: FFmpeg codec name (default ``"libx264"``).
 
         Returns:
-            A :class:`~imlite.core.video.Video` with this sequence as its
-            pending frame source.
+            A :class:`~imlite.core.video.Video` with this sequence pending.
 
         Example:
             >>> seq.rotate(90).merge(fps=25).save("out.mp4")
         """
-        from imlite.core.video import Video  # noqa: PLC0415
+        from imlite.core.video import Video
 
         return Video.from_frames(self, fps=fps, codec=codec)
 
     def to_list(self) -> list[Image]:
-        """Force eager evaluation and return all frames as a list.
+        """Force eager evaluation and return every frame.
 
-        This loads every frame into RAM - use with caution on long videos.
+        Warning:
+            This loads the whole sequence into RAM.  Iterate the sequence
+            instead when it is backed by a long video.
 
         Returns:
-            List of :class:`~imlite.core.image.Image` objects.
+            A list of :class:`~imlite.core.image.Image` objects.
         """
         if self._source_type == "list" and not self._pending_ops:
             return list(self._eager_frames or [])
@@ -399,60 +497,50 @@ class FrameSequence:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _clone(self) -> "FrameSequence":
-        """Return a shallow copy of this sequence (same source, same pending ops copy)."""
+    def _require_source(self) -> str:
+        """Return the source path, or fail loudly if this sequence has none."""
+        if self._source is None:
+            raise ValueError(
+                f"FrameSequence has source_type={self._source_type!r} but no source path. "
+                "Build sequences with from_video(), from_dir() or from_images()."
+            )
+        return self._source
+
+    def _safe_len(self) -> int | None:
+        """Return the frame count when it is cheap to know, else ``None``."""
+        try:
+            return len(self)
+        except Exception as exc:
+            log.debug("Sequence length unavailable: %s", exc)
+            return None
+
+    def _clone(self) -> FrameSequence:
+        """Copy this sequence: same source, an independent list of queued ops."""
         new_seq = FrameSequence()
         new_seq._source = self._source
         new_seq._source_type = self._source_type
         new_seq._step = self._step
         new_seq._start = self._start
         new_seq._end = self._end
-        new_seq._pending_ops = list(self._pending_ops)  # shallow copy of op list
-        new_seq._eager_frames = self._eager_frames  # shared reference - immutable
+        new_seq._pending_ops = list(self._pending_ops)
+        new_seq._eager_frames = self._eager_frames  # Image is immutable; sharing is safe
         return new_seq
 
     def _iter_source(self) -> Iterator[Image]:
-        """Yield raw (un-transformed) frames from the underlying source."""
-        from imlite.core.image import Image  # noqa: PLC0415
-
+        """Yield raw, untransformed frames from the underlying source."""
         if self._source_type == "list":
-            yield from (self._eager_frames or [])
+            yield from self._eager_frames or []
             return
 
         if self._source_type == "dir":
-            assert self._source is not None
-            paths = sorted_frame_paths(self._source)
-            for p in paths:
-                from imlite.ops.io import read_image  # noqa: PLC0415
+            from imlite.ops.io import read_image
 
-                yield read_image(p)
+            for path in sorted_frame_paths(self._require_source()):
+                yield read_image(path)
             return
 
-        if self._source_type == "video":
-            assert self._source is not None
-            import imageio.v2 as iio2  # noqa: PLC0415
+        from imlite.ops.video_io import iter_video_frames
 
-            from imlite.ops.video_io import get_video_info  # noqa: PLC0415
-
-            try:
-                reader = iio2.get_reader(self._source, plugin="ffmpeg")
-                total = get_video_info(self._source)["frame_count"] or None
-                stop = self._end if self._end is not None else (total or 10**9)
-                indices = range(self._start, stop, self._step)
-
-                for frame_idx in indices:
-                    try:
-                        rgb_arr = reader.get_data(frame_idx)
-                    except IndexError:
-                        break
-                    except Exception as exc:  # noqa: BLE001
-                        log.warning("Frame %d unreadable, skipping: %s", frame_idx, exc)
-                        continue
-                    # imageio yields RGB -> convert to BGR.
-                    if rgb_arr.ndim == 3 and rgb_arr.shape[2] == 3:
-                        bgr = rgb_arr[..., ::-1].copy()
-                    else:
-                        bgr = rgb_arr
-                    yield Image.from_numpy(bgr, color_space="BGR")
-            finally:
-                reader.close()
+        yield from iter_video_frames(
+            self._require_source(), step=self._step, start=self._start, end=self._end
+        )
