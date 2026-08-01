@@ -14,6 +14,7 @@ from typing import Any, TypeAlias, Union
 
 import numpy as np
 
+from imlite._typing import Array
 from imlite.core.image import Image
 from imlite.core.sequence import FrameSequence
 from imlite.core.video import Video
@@ -25,7 +26,7 @@ log = logging.getLogger(__name__)
 __all__ = ["load"]
 
 #: Anything :func:`load` accepts.
-Source: TypeAlias = Union[str, Path, np.ndarray, Image, Video, FrameSequence, list[Any]]  # noqa: UP007
+Source: TypeAlias = Union[str, Path, Array, Image, Video, FrameSequence, list[Any]]  # noqa: UP007
 
 
 def load(source: Source) -> Image | Video | FrameSequence:
@@ -40,7 +41,7 @@ def load(source: Source) -> Image | Video | FrameSequence:
     ``list[str]``           image file paths                            :class:`FrameSequence`
     ``list[ndarray]``       raw arrays                                  :class:`FrameSequence`
     ``list[Image]``         ``Image`` objects                           :class:`FrameSequence`
-    ``np.ndarray``          2-D or 3-D array                            :class:`Image`
+    ``Array``          2-D or 3-D array                            :class:`Image`
     ``Image``/``Video``/    already an imlite object                    unchanged
     ``FrameSequence``
     ======================  ==========================================  ======================

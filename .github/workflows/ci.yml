@@ -22,7 +22,10 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - run: uv python install 3.12
+      # 3.10 is the declared floor. Type-checking there pins both our own
+      # 3.10 compatibility and the dependency versions a minimum-supported
+      # user actually resolves.
+      - run: uv python install 3.10
       - name: Install
         run: uv pip install --system -e ".[dev,docs,show]"
       - name: ruff check

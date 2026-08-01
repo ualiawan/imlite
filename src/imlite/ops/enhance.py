@@ -7,13 +7,13 @@ with one exception: :func:`threshold` needs a notion of intensity, so it
 converts colour input to grayscale first using the image's own colour space.
 
 All functions accept an :class:`~imlite.core.image.Image` or a raw
-``np.ndarray`` and return the same type.
+``Array`` and return the same type.
 """
 
 import numpy as np
 from PIL import ImageFilter
 
-from imlite._typing import ImageLike, as_ndarray
+from imlite._typing import Array, ImageLike, as_ndarray
 from imlite.utils.pil import from_pil, to_pil
 from imlite.utils.validate import dispatch_type
 
@@ -21,11 +21,11 @@ __all__ = ["blur", "brightness", "contrast", "invert", "threshold"]
 
 
 @dispatch_type
-def blur(img: np.ndarray, radius: float = 2.0) -> np.ndarray:
+def blur(img: Array, radius: float = 2.0) -> Array:
     """Apply a Gaussian blur to *img*.
 
     Args:
-        img: Input image as ``np.ndarray`` or :class:`~imlite.core.image.Image`.
+        img: Input image as ``Array`` or :class:`~imlite.core.image.Image`.
         radius: Standard deviation of the Gaussian kernel, in pixels.  Larger
             values blur more.  ``0`` returns the image unchanged.
 
@@ -47,11 +47,11 @@ def blur(img: np.ndarray, radius: float = 2.0) -> np.ndarray:
 
 
 @dispatch_type
-def brightness(img: np.ndarray, factor: float = 1.0) -> np.ndarray:
+def brightness(img: Array, factor: float = 1.0) -> Array:
     """Scale the brightness of *img*.
 
     Args:
-        img: Input image as ``np.ndarray`` or :class:`~imlite.core.image.Image`.
+        img: Input image as ``Array`` or :class:`~imlite.core.image.Image`.
         factor: Multiplier applied to every channel.  ``1.0`` leaves the image
             unchanged, ``0.0`` produces black, ``2.0`` doubles brightness.
             Results are clipped to ``0-255``.
@@ -72,11 +72,11 @@ def brightness(img: np.ndarray, factor: float = 1.0) -> np.ndarray:
 
 
 @dispatch_type
-def contrast(img: np.ndarray, factor: float = 1.0) -> np.ndarray:
+def contrast(img: Array, factor: float = 1.0) -> Array:
     """Scale the contrast of *img* around its own mean intensity.
 
     Args:
-        img: Input image as ``np.ndarray`` or :class:`~imlite.core.image.Image`.
+        img: Input image as ``Array`` or :class:`~imlite.core.image.Image`.
         factor: Contrast multiplier.  ``1.0`` leaves the image unchanged,
             ``0.0`` flattens it to a uniform grey, values above ``1.0`` push
             pixels away from the mean.  Results are clipped to ``0-255``.
@@ -99,11 +99,11 @@ def contrast(img: np.ndarray, factor: float = 1.0) -> np.ndarray:
 
 
 @dispatch_type
-def invert(img: np.ndarray) -> np.ndarray:
+def invert(img: Array) -> Array:
     """Invert *img* photographically (``255 - value``).
 
     Args:
-        img: Input image as ``np.ndarray`` or :class:`~imlite.core.image.Image`.
+        img: Input image as ``Array`` or :class:`~imlite.core.image.Image`.
 
     Returns:
         The inverted image, in the same type as the input.  An alpha channel,
@@ -128,7 +128,7 @@ def threshold(
     single-channel with shape ``(H, W, 1)``.
 
     Args:
-        img: Input image as ``np.ndarray`` or :class:`~imlite.core.image.Image`.
+        img: Input image as ``Array`` or :class:`~imlite.core.image.Image`.
             A bare array is assumed to be BGR, matching the rest of imlite.
         value: Cut-off intensity in ``0-255``.  Pixels **above** it become
             *max_value*; the rest become ``0``.

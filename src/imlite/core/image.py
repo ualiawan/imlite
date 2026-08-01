@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 
-from imlite._typing import as_ndarray
+from imlite._typing import Array, as_ndarray
 from imlite.exceptions import ImliteShapeError
 from imlite.utils.dtype import as_uint8
 
@@ -76,7 +76,7 @@ class Image:
 
     def __init__(
         self,
-        data: np.ndarray,
+        data: Array,
         color_space: str = "BGR",
         path: str | None = None,
         *,
@@ -92,7 +92,7 @@ class Image:
             # as_uint8 returned the caller's own buffer untouched; take our own
             # so their later writes cannot reach through into this Image.
             converted = data.copy()
-        self._data: np.ndarray = np.ascontiguousarray(converted)
+        self._data: Array = np.ascontiguousarray(converted)
         self._color_space: str = color_space
         self._path: str | None = path
 
@@ -103,7 +103,7 @@ class Image:
     @classmethod
     def from_numpy(
         cls,
-        arr: np.ndarray,
+        arr: Array,
         color_space: str = "BGR",
         path: str | None = None,
         *,
@@ -172,12 +172,12 @@ class Image:
     # ------------------------------------------------------------------
 
     @property
-    def data(self) -> np.ndarray:
+    def data(self) -> Array:
         """A copy of the pixel array - safe to mutate without affecting this ``Image``."""
         return as_ndarray(self._data.copy())
 
     @property
-    def array(self) -> np.ndarray:
+    def array(self) -> Array:
         """A read-only view of the pixel array - no copy.
 
         Use this in hot loops where :attr:`data`'s copy would be wasted.  The
@@ -290,7 +290,7 @@ class Image:
         plt.show()
         return self
 
-    def to_numpy(self) -> np.ndarray:
+    def to_numpy(self) -> Array:
         """Return a copy of the pixel array.
 
         Returns:
@@ -612,7 +612,7 @@ class Image:
         # Image usable as a dict key without pretending to be value-hashable.
         return id(self)
 
-    def __array__(self, dtype: Any = None, copy: bool | None = None) -> np.ndarray:
+    def __array__(self, dtype: Any = None, copy: bool | None = None) -> Array:
         """Support ``np.asarray(img)`` and friends."""
         if copy is False:
             return self.array if dtype is None else as_ndarray(self._data.astype(dtype))
@@ -642,7 +642,7 @@ def _as_image(result: Any) -> Image:
     return cast("Image", result)
 
 
-def _validate_array(arr: np.ndarray) -> None:
+def _validate_array(arr: Array) -> None:
     """Raise if *arr* is not a valid image array."""
     if not isinstance(arr, np.ndarray):
         raise TypeError(f"Expected numpy.ndarray, got {type(arr).__name__!r}.")

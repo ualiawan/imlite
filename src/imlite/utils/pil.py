@@ -15,12 +15,13 @@ helpers hide the two annoyances of round-tripping through it:
 import numpy as np
 from PIL import Image as PILImage
 
+from imlite._typing import Array
 from imlite.exceptions import ImliteShapeError
 
 __all__ = ["from_pil", "to_pil"]
 
 
-def to_pil(arr: np.ndarray) -> PILImage.Image:
+def to_pil(arr: Array) -> PILImage.Image:
     """Wrap a ``uint8`` numpy array as a :class:`PIL.Image.Image`.
 
     Args:
@@ -49,7 +50,7 @@ def to_pil(arr: np.ndarray) -> PILImage.Image:
     )
 
 
-def from_pil(image: PILImage.Image, like: np.ndarray) -> np.ndarray:
+def from_pil(image: PILImage.Image, like: Array) -> Array:
     """Convert a Pillow image back to a numpy array shaped like *like*.
 
     Args:

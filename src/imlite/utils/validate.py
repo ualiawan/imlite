@@ -17,7 +17,7 @@ from typing import Any, Concatenate, ParamSpec, Protocol, cast
 
 import numpy as np
 
-from imlite._typing import ImageLike
+from imlite._typing import Array, ImageLike
 from imlite.exceptions import CropOutOfBoundsError, ImliteShapeError
 
 __all__ = [
@@ -52,7 +52,7 @@ class ColorOp(Protocol):
 
 
 def dispatch_type(
-    fn: Callable[Concatenate[np.ndarray, _P], np.ndarray],
+    fn: Callable[Concatenate[Array, _P], Array],
 ) -> Callable[Concatenate[ImageLike, _P], ImageLike]:
     """Make an ops function transparently accept ``Image`` or ``np.ndarray``.
 
@@ -62,19 +62,19 @@ def dispatch_type(
     2. The result is re-wrapped as a new ``Image`` with the **same**
        ``color_space`` and ``path=None``.
 
-    When called with a plain ``np.ndarray`` the array is shape-checked and
+    When called with a plain ``Array`` the array is shape-checked and
     *fn*'s result is returned unchanged.
 
     Args:
-        fn: An ops function whose first argument is an ``np.ndarray`` and which
-            returns a freshly allocated ``np.ndarray``.
+        fn: An ops function whose first argument is an ``Array`` and which
+            returns a freshly allocated ``Array``.
 
     Returns:
         The wrapped function.
 
     Example:
         >>> @dispatch_type
-        ... def crop(img: np.ndarray, x, y, w, h) -> np.ndarray:
+        ... def crop(img: Array, x, y, w, h) -> Array:
         ...     return img[y : y + h, x : x + w].copy()
         >>> crop(my_image, 0, 0, 100, 100)  # doctest: +SKIP  -> Image
         >>> crop(my_array, 0, 0, 100, 100)  # doctest: +SKIP  -> ndarray
@@ -98,7 +98,7 @@ def dispatch_type(
     return cast("Callable[Concatenate[ImageLike, _P], ImageLike]", wrapper)
 
 
-def color_op(target: str) -> Callable[[Callable[[np.ndarray, str], np.ndarray]], ColorOp]:
+def color_op(target: str) -> Callable[[Callable[[Array, str], Array]], ColorOp]:
     """Build a decorator for a colour-space conversion in ``ops/color.py``.
 
     The wrapped function is called as ``fn(array, source_space)`` and must
@@ -106,7 +106,7 @@ def color_op(target: str) -> Callable[[Callable[[np.ndarray, str], np.ndarray]],
 
     - Given an :class:`~imlite.core.image.Image`, the image's own
       ``color_space`` is used as the source and the result is tagged *target*.
-    - Given a bare ``np.ndarray`` there is no tag to read, so the source space
+    - Given a bare ``Array`` there is no tag to read, so the source space
       comes from the caller's ``source=`` keyword (default ``"BGR"``, matching
       the rest of the library).
 
@@ -119,12 +119,12 @@ def color_op(target: str) -> Callable[[Callable[[np.ndarray, str], np.ndarray]],
 
     Example:
         >>> @color_op("GRAY")
-        ... def to_gray(arr: np.ndarray, source: str) -> np.ndarray: ...
+        ... def to_gray(arr: Array, source: str) -> Array: ...
         >>> to_gray(my_image)                  # doctest: +SKIP  -> Image(GRAY)
         >>> to_gray(my_array, source="RGB")    # doctest: +SKIP  -> ndarray
     """
 
-    def decorator(fn: Callable[[np.ndarray, str], np.ndarray]) -> ColorOp:
+    def decorator(fn: Callable[[Array, str], Array]) -> ColorOp:
         @functools.wraps(fn)
         def wrapper(img: ImageLike, *, source: str | None = None) -> ImageLike:
             from imlite.core.image import Image
@@ -155,7 +155,7 @@ def require_ndarray(arr: Any, name: str = "img") -> None:
         name: Argument name used in the error message.
 
     Raises:
-        TypeError: If *arr* is not an ``np.ndarray``.
+        TypeError: If *arr* is not an ``Array``.
     """
     if not isinstance(arr, np.ndarray):
         raise TypeError(
@@ -221,7 +221,7 @@ def check_axis(axis: str) -> None:
         raise ValueError(f"Invalid flip axis {axis!r}. Choose from: {sorted(_VALID_AXES)}.")
 
 
-def check_ndarray_image_shape(arr: np.ndarray, name: str = "img") -> None:
+def check_ndarray_image_shape(arr: Array, name: str = "img") -> None:
     """Raise :exc:`~imlite.exceptions.ImliteShapeError` if *arr* is not image-shaped.
 
     Valid shapes are ``(H, W)``, ``(H, W, 1)``, ``(H, W, 3)`` and ``(H, W, 4)``.

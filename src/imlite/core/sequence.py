@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
+from imlite._typing import Array
 from imlite.core.image import Image
 from imlite.utils.path import sorted_frame_paths
 
@@ -42,7 +43,7 @@ class FrameSequence:
 
     - :meth:`from_video` - lazy stream from a video file.
     - :meth:`from_dir` - lazy stream from a directory of image files.
-    - :meth:`from_images` - eager list of ``Image`` or ``np.ndarray`` frames.
+    - :meth:`from_images` - eager list of ``Image`` or ``Array`` frames.
 
     Example:
         >>> seq = imlite.load("clip.mp4").extract_frames(step=2)
@@ -128,18 +129,18 @@ class FrameSequence:
         return seq
 
     @classmethod
-    def from_images(cls, images: Sequence[Image | np.ndarray]) -> FrameSequence:
+    def from_images(cls, images: Sequence[Image | Array]) -> FrameSequence:
         """Create an eager sequence from frames already in memory.
 
         Args:
-            images: :class:`~imlite.core.image.Image` objects or ``np.ndarray``
+            images: :class:`~imlite.core.image.Image` objects or ``Array``
                 arrays.  Arrays are wrapped automatically and assumed to be BGR.
 
         Returns:
             A new eager :class:`FrameSequence`.
 
         Raises:
-            TypeError: If any item is neither an ``Image`` nor an ``np.ndarray``.
+            TypeError: If any item is neither an ``Image`` nor an ``Array``.
         """
         wrapped: list[Image] = []
         for position, item in enumerate(images):
@@ -149,7 +150,7 @@ class FrameSequence:
                 wrapped.append(Image.from_numpy(item))
             else:
                 raise TypeError(
-                    f"from_images() expects Image or np.ndarray frames; "
+                    f"from_images() expects Image or Array frames; "
                     f"item {position} is {type(item).__name__!r}."
                 )
 

@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 import imageio.v2 as iio2
 import numpy as np
 
+from imlite._typing import Array
 from imlite.exceptions import ImliteReadError, ImliteWriteError
 from imlite.utils.ffmpeg import require_ffmpeg
 from imlite.utils.log import progress
@@ -310,7 +311,7 @@ def merge_frames(
 
     Args:
         source: A directory of image files, a list of
-            :class:`~imlite.core.image.Image` or ``np.ndarray`` frames, or a
+            :class:`~imlite.core.image.Image` or ``Array`` frames, or a
             :class:`~imlite.core.sequence.FrameSequence`.  Raw arrays are
             assumed to be **BGR**, matching the rest of imlite - pass
             ``Image`` objects if yours are RGB.
@@ -393,7 +394,9 @@ def merge_frames(
                 pixels = frame.to_rgb().array if isinstance(frame, Image) else np.asarray(frame)
                 pixels = _drop_single_channel(pixels)
                 if count == 0:
-                    _warn_if_padded(pixels.shape[:2], macro_block_size, output_path)
+                    _warn_if_padded(
+                        int(pixels.shape[1]), int(pixels.shape[0]), macro_block_size, output_path
+                    )
                 writer.append_data(pixels)
                 count += 1
         finally:
@@ -419,7 +422,7 @@ def merge_frames(
 # ---------------------------------------------------------------------------
 
 
-def _rgb_to_bgr(pixels: np.ndarray) -> np.ndarray:
+def _rgb_to_bgr(pixels: Array) -> Array:
     """Swap the R and B channels, keeping any alpha channel last."""
     array = np.asarray(pixels)
     if array.ndim != 3:
@@ -450,7 +453,7 @@ def _as_sequence(source: str | list[Any] | FrameSequence) -> FrameSequence:
     return source
 
 
-def _warn_if_padded(shape: tuple[int, int], macro_block_size: int, output_path: str) -> None:
+def _warn_if_padded(width: int, height: int, macro_block_size: int, output_path: str) -> None:
     """Log a warning if the encoder will round the frame size up.
 
     ffmpeg's ``yuv420p`` needs even dimensions, so odd ones get padded no matter
@@ -459,7 +462,6 @@ def _warn_if_padded(shape: tuple[int, int], macro_block_size: int, output_path: 
     """
     if macro_block_size <= 1:
         return
-    height, width = shape
     padded = tuple(-(-value // macro_block_size) * macro_block_size for value in (width, height))
     if padded != (width, height):
         log.warning(
@@ -475,7 +477,7 @@ def _warn_if_padded(shape: tuple[int, int], macro_block_size: int, output_path: 
         )
 
 
-def _drop_single_channel(pixels: np.ndarray) -> np.ndarray:
+def _drop_single_channel(pixels: Array) -> Array:
     """Collapse ``(H, W, 1)`` to ``(H, W)``, which is what ffmpeg wants for gray frames."""
     if pixels.ndim == 3 and pixels.shape[2] == 1:
         return pixels[:, :, 0]

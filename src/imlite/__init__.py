@@ -124,7 +124,7 @@ def read_frames(source: str | list[Any]) -> FrameSequence:
 
     Args:
         source: Either a directory path, whose image files are loaded in
-            natural sort order, or a list of image file paths, ``np.ndarray``
+            natural sort order, or a list of image file paths, ``Array``
             arrays or :class:`Image` objects.  Raw arrays are assumed to be
             BGR.
 

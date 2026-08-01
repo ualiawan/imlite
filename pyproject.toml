@@ -127,7 +127,10 @@ indent-style = "space"
 # Mypy - type checking
 # ---------------------------------------------------------------------------
 [tool.mypy]
-python_version = "3.10"
+# Deliberately no `python_version`: it would also force mypy to parse
+# third-party stubs at that version, and numpy >= 2.5 ships stubs using PEP 695
+# `type` statements (3.12+ syntax). The 3.10 floor is guaranteed instead by
+# running the CI mypy job on 3.10 and by ruff's target-version.
 strict = true
 warn_return_any = true
 warn_unused_configs = true

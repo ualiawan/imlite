@@ -26,7 +26,7 @@ import logging
 
 import numpy as np
 
-from imlite._typing import as_ndarray
+from imlite._typing import Array, as_ndarray
 from imlite.exceptions import ImliteDtypeError
 
 log = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ _HINT = (
 )
 
 
-def as_uint8(arr: np.ndarray) -> np.ndarray:
+def as_uint8(arr: Array) -> Array:
     """Return *arr* as a ``uint8`` array, converting by documented rules.
 
     Args:
@@ -89,7 +89,7 @@ def as_uint8(arr: np.ndarray) -> np.ndarray:
     raise ImliteDtypeError(f"Unsupported image dtype {arr.dtype!r}. imlite works on uint8 pixels.")
 
 
-def _float_to_uint8(arr: np.ndarray) -> np.ndarray:
+def _float_to_uint8(arr: Array) -> Array:
     """Scale a float array into ``uint8``, inferring whether it is 0-1 or 0-255."""
     finite = np.isfinite(arr)
     if not finite.all():

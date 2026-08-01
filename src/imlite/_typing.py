@@ -6,19 +6,25 @@ Kept in its own module so the alias can be imported anywhere without dragging
 
 from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
-import numpy as np
+import numpy.typing as npt
 
 if TYPE_CHECKING:  # pragma: no cover
     from imlite.core.image import Image
 
-__all__ = ["ImageLike", "as_ndarray"]
+__all__ = ["Array", "ImageLike", "as_ndarray"]
+
+#: A numpy array of any dtype. Spelled via ``numpy.typing`` rather than a
+#: bare ``np.ndarray`` because only numpy >= 2.4 gives ``ndarray`` PEP 696
+#: parameter defaults; on older versions ``mypy --strict`` rejects the bare
+#: form with ``type-arg``, and imlite supports numpy >= 1.23.
+Array: TypeAlias = npt.NDArray[Any]
 
 #: Anything imlite's operations accept as an image: an :class:`Image` wrapper
 #: or a raw ``numpy`` array.  Operations return whichever type they were given.
-ImageLike: TypeAlias = "Image | np.ndarray"
+ImageLike: TypeAlias = "Image | Array"
 
 
-def as_ndarray(value: Any) -> np.ndarray:
+def as_ndarray(value: Any) -> Array:
     """Narrow a numpy expression that the stubs type as ``Any``.
 
     numpy types the result of indexing, of arithmetic on ``dtype[Any]`` arrays,
@@ -36,4 +42,4 @@ def as_ndarray(value: Any) -> np.ndarray:
     Returns:
         The same object, typed as ``np.ndarray``.
     """
-    return cast("np.ndarray", value)
+    return cast("Array", value)

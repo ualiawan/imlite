@@ -16,6 +16,7 @@ from collections.abc import Sequence
 import numpy as np
 from PIL import Image as PILImage
 
+from imlite._typing import Array
 from imlite.exceptions import ImliteShapeError
 from imlite.utils.pil import from_pil, to_pil
 from imlite.utils.validate import (
@@ -40,11 +41,11 @@ RESAMPLE_FILTERS: dict[str, PILImage.Resampling] = {
 
 
 @dispatch_type
-def crop(img: np.ndarray, x: int, y: int, width: int, height: int) -> np.ndarray:
+def crop(img: Array, x: int, y: int, width: int, height: int) -> Array:
     """Crop *img* to the rectangle defined by (*x*, *y*, *width*, *height*).
 
     Args:
-        img: Input image as ``np.ndarray`` or :class:`~imlite.core.image.Image`.
+        img: Input image as ``Array`` or :class:`~imlite.core.image.Image`.
         x: Left edge of the crop box (pixels from left, 0-indexed).
         y: Top edge of the crop box (pixels from top, 0-indexed).
         width: Width of the crop box in pixels.
@@ -65,7 +66,7 @@ def crop(img: np.ndarray, x: int, y: int, width: int, height: int) -> np.ndarray
 
 
 @dispatch_type
-def rotate(img: np.ndarray, angle: float, expand: bool = True) -> np.ndarray:
+def rotate(img: Array, angle: float, expand: bool = True) -> Array:
     """Rotate *img* counter-clockwise by *angle* degrees.
 
     Exact multiples of 90 degrees take a lossless ``np.rot90`` path - no
@@ -73,7 +74,7 @@ def rotate(img: np.ndarray, angle: float, expand: bool = True) -> np.ndarray:
     Every other angle is resampled bicubically by Pillow.
 
     Args:
-        img: Input image as ``np.ndarray`` or :class:`~imlite.core.image.Image`.
+        img: Input image as ``Array`` or :class:`~imlite.core.image.Image`.
         angle: Rotation angle in degrees, counter-clockwise.
         expand: If ``True`` (default) the output canvas grows to contain the
             whole rotated image.  If ``False`` the output keeps the input size
@@ -98,19 +99,19 @@ def rotate(img: np.ndarray, angle: float, expand: bool = True) -> np.ndarray:
 
 @dispatch_type
 def resize(
-    img: np.ndarray,
+    img: Array,
     width: int | None = None,
     height: int | None = None,
     keep_aspect: bool = False,
     resample: str = "auto",
-) -> np.ndarray:
+) -> Array:
     """Resize *img* to (*width*, *height*).
 
     At least one of *width* or *height* must be given.  When only one is
     supplied the other is derived from the original aspect ratio.
 
     Args:
-        img: Input image as ``np.ndarray`` or :class:`~imlite.core.image.Image`.
+        img: Input image as ``Array`` or :class:`~imlite.core.image.Image`.
         width: Target width in pixels, or ``None`` to infer from *height*.
         height: Target height in pixels, or ``None`` to infer from *width*.
         keep_aspect: If ``True``, scale the image to fit *inside* the
@@ -164,14 +165,14 @@ def resize(
 
 
 @dispatch_type
-def thumbnail(img: np.ndarray, size: int, resample: str = "auto") -> np.ndarray:
+def thumbnail(img: Array, size: int, resample: str = "auto") -> Array:
     """Scale *img* so its longest side is *size* pixels, preserving aspect ratio.
 
     Unlike :func:`resize` this never enlarges: an image already smaller than
     *size* is returned unchanged, which is what thumbnail generation wants.
 
     Args:
-        img: Input image as ``np.ndarray`` or :class:`~imlite.core.image.Image`.
+        img: Input image as ``Array`` or :class:`~imlite.core.image.Image`.
         size: Length in pixels of the longest side of the result.
         resample: Resampling filter name - see :func:`resize`.
 
@@ -198,11 +199,11 @@ def thumbnail(img: np.ndarray, size: int, resample: str = "auto") -> np.ndarray:
 
 
 @dispatch_type
-def flip(img: np.ndarray, axis: str = "h") -> np.ndarray:
+def flip(img: Array, axis: str = "h") -> Array:
     """Flip *img* along the given axis.
 
     Args:
-        img: Input image as ``np.ndarray`` or :class:`~imlite.core.image.Image`.
+        img: Input image as ``Array`` or :class:`~imlite.core.image.Image`.
         axis: One of ``"h"`` / ``"horizontal"`` (left-right), ``"v"`` /
             ``"vertical"`` (top-bottom), or ``"both"``.
 
@@ -226,17 +227,17 @@ def flip(img: np.ndarray, axis: str = "h") -> np.ndarray:
 
 @dispatch_type
 def pad(
-    img: np.ndarray,
+    img: Array,
     top: int = 0,
     bottom: int = 0,
     left: int = 0,
     right: int = 0,
     color: int | Sequence[int] = (0, 0, 0),
-) -> np.ndarray:
+) -> Array:
     """Add a constant-colour border around *img*.
 
     Args:
-        img: Input image as ``np.ndarray`` or :class:`~imlite.core.image.Image`.
+        img: Input image as ``Array`` or :class:`~imlite.core.image.Image`.
         top: Pixels to add on the top edge.
         bottom: Pixels to add on the bottom edge.
         left: Pixels to add on the left edge.
@@ -292,7 +293,7 @@ def _resolve_resample(name: str, shrinking: bool) -> PILImage.Resampling:
         ) from None
 
 
-def _fill_value(color: int | Sequence[int], channels: int) -> np.ndarray:
+def _fill_value(color: int | Sequence[int], channels: int) -> Array:
     """Normalise a fill colour to exactly *channels* components."""
     if isinstance(color, (int, np.integer)):
         return np.full(channels, int(color), dtype=np.uint8)

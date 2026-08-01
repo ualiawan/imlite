@@ -22,7 +22,7 @@ An alpha channel is preserved across ``BGR``/``RGB`` conversions and dropped by
 ``GRAY``, ``HSV`` and ``LAB``, matching OpenCV.
 
 Each function accepts an :class:`~imlite.core.image.Image` **or** a raw
-``np.ndarray`` and returns the same type.  For a bare array there is no tag to
+``Array`` and returns the same type.  For a bare array there is no tag to
 read, so the input space comes from the ``source=`` keyword::
 
     imlite.to_gray(image)                  # uses image.color_space
@@ -31,7 +31,7 @@ read, so the input space comes from the ``source=`` keyword::
 
 import numpy as np
 
-from imlite._typing import as_ndarray
+from imlite._typing import Array, as_ndarray
 from imlite.exceptions import ImliteColorSpaceError
 from imlite.utils.validate import color_op
 
@@ -66,11 +66,11 @@ _LAB_KAPPA = 7.787
 
 
 @color_op("RGB")
-def to_rgb(img: np.ndarray, source: str = "BGR") -> np.ndarray:
+def to_rgb(img: Array, source: str = "BGR") -> Array:
     """Convert *img* to RGB.
 
     Args:
-        img: An :class:`~imlite.core.image.Image` or ``np.ndarray``.
+        img: An :class:`~imlite.core.image.Image` or ``Array``.
         source: Colour space of *img*.  Ignored when *img* is an ``Image``
             (its own tag is used).  Defaults to ``"BGR"``.
 
@@ -86,11 +86,11 @@ def to_rgb(img: np.ndarray, source: str = "BGR") -> np.ndarray:
 
 
 @color_op("BGR")
-def to_bgr(img: np.ndarray, source: str = "RGB") -> np.ndarray:
+def to_bgr(img: Array, source: str = "RGB") -> Array:
     """Convert *img* to BGR (imlite's internal default).
 
     Args:
-        img: An :class:`~imlite.core.image.Image` or ``np.ndarray``.
+        img: An :class:`~imlite.core.image.Image` or ``Array``.
         source: Colour space of *img*.  Ignored when *img* is an ``Image``.
             Defaults to ``"RGB"``.
 
@@ -104,7 +104,7 @@ def to_bgr(img: np.ndarray, source: str = "RGB") -> np.ndarray:
 
 
 @color_op("GRAY")
-def to_gray(img: np.ndarray, source: str = "BGR") -> np.ndarray:
+def to_gray(img: Array, source: str = "BGR") -> Array:
     """Convert *img* to single-channel grayscale.
 
     Uses the ITU-R BT.601 luma weights ``0.299R + 0.587G + 0.114B``.  The
@@ -112,7 +112,7 @@ def to_gray(img: np.ndarray, source: str = "BGR") -> np.ndarray:
     code never has to special-case grayscale.
 
     Args:
-        img: An :class:`~imlite.core.image.Image` or ``np.ndarray``.
+        img: An :class:`~imlite.core.image.Image` or ``Array``.
         source: Colour space of *img*.  Ignored when *img* is an ``Image``.
 
     Returns:
@@ -127,11 +127,11 @@ def to_gray(img: np.ndarray, source: str = "BGR") -> np.ndarray:
 
 
 @color_op("HSV")
-def to_hsv(img: np.ndarray, source: str = "BGR") -> np.ndarray:
+def to_hsv(img: Array, source: str = "BGR") -> Array:
     """Convert *img* to HSV.
 
     Args:
-        img: An :class:`~imlite.core.image.Image` or ``np.ndarray``.
+        img: An :class:`~imlite.core.image.Image` or ``Array``.
         source: Colour space of *img*.  Ignored when *img* is an ``Image``.
 
     Returns:
@@ -149,11 +149,11 @@ def to_hsv(img: np.ndarray, source: str = "BGR") -> np.ndarray:
 
 
 @color_op("LAB")
-def to_lab(img: np.ndarray, source: str = "BGR") -> np.ndarray:
+def to_lab(img: Array, source: str = "BGR") -> Array:
     """Convert *img* to CIE L*a*b*.
 
     Args:
-        img: An :class:`~imlite.core.image.Image` or ``np.ndarray``.
+        img: An :class:`~imlite.core.image.Image` or ``Array``.
         source: Colour space of *img*.  Ignored when *img* is an ``Image``.
 
     Returns:
@@ -171,7 +171,7 @@ def to_lab(img: np.ndarray, source: str = "BGR") -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def _to_rgb_array(img: np.ndarray, source: str) -> np.ndarray:
+def _to_rgb_array(img: Array, source: str) -> Array:
     """Convert an array in *source* space to RGB (alpha preserved where present)."""
     if source not in VALID_COLOR_SPACES:
         raise ImliteColorSpaceError(
@@ -193,12 +193,12 @@ def _to_rgb_array(img: np.ndarray, source: str) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def _ensure_3d(img: np.ndarray) -> np.ndarray:
+def _ensure_3d(img: Array) -> Array:
     """Return *img* with an explicit channel axis: ``(H, W)`` becomes ``(H, W, 1)``."""
     return np.asarray(img[:, :, np.newaxis]) if img.ndim == 2 else img
 
 
-def _split_alpha(img: np.ndarray) -> tuple[np.ndarray, np.ndarray | None]:
+def _split_alpha(img: Array) -> tuple[Array, Array | None]:
     """Split a 4-channel array into its colour channels and its alpha channel."""
     arr = _ensure_3d(img)
     if arr.shape[2] == 4:
@@ -206,7 +206,7 @@ def _split_alpha(img: np.ndarray) -> tuple[np.ndarray, np.ndarray | None]:
     return arr, None
 
 
-def _swap_rb(img: np.ndarray) -> np.ndarray:
+def _swap_rb(img: Array) -> Array:
     """Swap the red and blue channels, leaving any alpha channel in place.
 
     ``img[..., ::-1]`` would reverse all four channels of an RGBA image and
@@ -222,7 +222,7 @@ def _swap_rb(img: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(np.concatenate([swapped, alpha], axis=2))
 
 
-def _round_u8(arr: np.ndarray) -> np.ndarray:
+def _round_u8(arr: Array) -> Array:
     """Round a float array and clip it into ``uint8``."""
     return as_ndarray(np.clip(np.rint(arr), 0, 255).astype(np.uint8))
 
@@ -232,7 +232,7 @@ def _round_u8(arr: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def _rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:
+def _rgb_to_hsv(rgb: Array) -> Array:
     """Convert an 8-bit RGB array to OpenCV-encoded 8-bit HSV."""
     scaled = rgb.astype(np.float32) / 255.0
     red, green, blue = scaled[..., 0], scaled[..., 1], scaled[..., 2]
@@ -262,7 +262,7 @@ def _rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:
     return np.stack([hue_u8, _round_u8(saturation * 255.0), _round_u8(value * 255.0)], axis=-1)
 
 
-def _hsv_to_rgb(hsv: np.ndarray) -> np.ndarray:
+def _hsv_to_rgb(hsv: Array) -> Array:
     """Convert an OpenCV-encoded 8-bit HSV array back to 8-bit RGB."""
     arr = _ensure_3d(hsv).astype(np.float32)
     hue = arr[..., 0] * 2.0
@@ -296,17 +296,17 @@ def _hsv_to_rgb(hsv: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def _srgb_to_linear(channel: np.ndarray) -> np.ndarray:
+def _srgb_to_linear(channel: Array) -> Array:
     """Undo the sRGB transfer function, mapping 0-1 gamma values to linear light."""
     return np.where(channel <= 0.04045, channel / 12.92, ((channel + 0.055) / 1.055) ** 2.4)
 
 
-def _linear_to_srgb(channel: np.ndarray) -> np.ndarray:
+def _linear_to_srgb(channel: Array) -> Array:
     """Apply the sRGB transfer function, mapping linear light back to 0-1 gamma values."""
     return np.where(channel <= 0.0031308, channel * 12.92, 1.055 * channel ** (1 / 2.4) - 0.055)
 
 
-def _rgb_to_lab(rgb: np.ndarray) -> np.ndarray:
+def _rgb_to_lab(rgb: Array) -> Array:
     """Convert an 8-bit sRGB array to OpenCV-encoded 8-bit L*a*b*."""
     linear = _srgb_to_linear(rgb.astype(np.float64) / 255.0)
     xyz = (linear @ _RGB_TO_XYZ.T) / _WHITE
@@ -329,7 +329,7 @@ def _rgb_to_lab(rgb: np.ndarray) -> np.ndarray:
     )
 
 
-def _lab_to_rgb(lab: np.ndarray) -> np.ndarray:
+def _lab_to_rgb(lab: Array) -> Array:
     """Convert an OpenCV-encoded 8-bit L*a*b* array back to 8-bit sRGB."""
     arr = _ensure_3d(lab).astype(np.float64)
     lightness = arr[..., 0] * 100.0 / 255.0
@@ -340,7 +340,7 @@ def _lab_to_rgb(lab: np.ndarray) -> np.ndarray:
     fx = fy + a_star / 500.0
     fz = fy - b_star / 200.0
 
-    def _finv(f: np.ndarray) -> np.ndarray:
+    def _finv(f: Array) -> Array:
         cubed = f**3
         return np.where(cubed > _LAB_EPS, cubed, (f - 16.0 / 116.0) / _LAB_KAPPA)
 

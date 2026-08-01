@@ -15,6 +15,7 @@ from typing import Any
 import imageio.v3 as iio
 import numpy as np
 
+from imlite._typing import Array
 from imlite.core.image import Image
 from imlite.exceptions import ImliteReadError, ImliteWriteError
 from imlite.utils.dtype import as_uint8
@@ -75,11 +76,11 @@ def read_image(path: str) -> Image:
     return Image(data, color_space=color_space, path=path_str, copy=False)
 
 
-def write_image(img: Image | np.ndarray, path: str, quality: int = 95) -> None:
+def write_image(img: Image | Array, path: str, quality: int = 95) -> None:
     """Write *img* to disk.
 
     Args:
-        img: An :class:`~imlite.core.image.Image`, or a raw ``np.ndarray``
+        img: An :class:`~imlite.core.image.Image`, or a raw ``Array``
             which is assumed to be **BGR** (imlite's internal convention).
         path: Destination path.  The format is inferred from the extension and
             missing parent directories are created.
@@ -125,7 +126,7 @@ def write_image(img: Image | np.ndarray, path: str, quality: int = 95) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _rgb_to_bgr(pixels: np.ndarray) -> np.ndarray:
+def _rgb_to_bgr(pixels: Array) -> Array:
     """Swap R and B, leaving any alpha channel last.
 
     A plain ``[..., ::-1]`` would reverse all four channels of an RGBA image
@@ -136,7 +137,7 @@ def _rgb_to_bgr(pixels: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(pixels[..., ::-1])
 
 
-def _as_rgb_for_disk(img: Image | np.ndarray) -> np.ndarray:
+def _as_rgb_for_disk(img: Image | Array) -> Array:
     """Return *img* as an RGB (or grayscale) array ready for ``imageio.imwrite``."""
     if isinstance(img, Image):
         # Colour spaces other than BGR/RGB/GRAY have no meaning to an image
