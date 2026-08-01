@@ -8,27 +8,38 @@ dynamic = ["version"]
 description = "Lightweight Python library for image and video processing - one-liners for everyday CV workflows."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [{ name = "ualiawan" }]
-keywords = ["image", "video", "computer-vision", "opencv", "ffmpeg", "image-processing"]
+keywords = ["image", "video", "computer-vision", "ffmpeg", "image-processing", "frames"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Typing :: Typed",
 ]
+# No OpenCV. Pixel work is numpy + Pillow; video is imageio + a bundled ffmpeg.
+# Pillow is already a hard dependency of imageio, so declaring it costs nothing.
 dependencies = [
-    "numpy>=1.21",
-    "opencv-python-headless>=4.5",
+    "numpy>=1.23",
+    "pillow>=9.1",
     "imageio>=2.28",
     "imageio-ffmpeg>=0.4.9",
     "tqdm>=4.60",
 ]
 
 [project.optional-dependencies]
-pillow = ["Pillow>=9.0"]
+show = ["matplotlib>=3.5"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
@@ -42,11 +53,15 @@ docs = [
     "mkdocstrings[python]>=0.24",
 ]
 
+[project.scripts]
+imlite = "imlite.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/ualiawan/imlite"
-Documentation = "https://imlite.readthedocs.io"
+Documentation = "https://ualiawan.github.io/imlite/"
 Repository = "https://github.com/ualiawan/imlite"
 Issues = "https://github.com/ualiawan/imlite/issues"
+Changelog = "https://github.com/ualiawan/imlite/blob/main/CHANGELOG.md"
 
 # ---------------------------------------------------------------------------
 # Hatchling - version from src/imlite/_version.py
@@ -57,13 +72,16 @@ path = "src/imlite/_version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/imlite"]
 
+[tool.hatch.build.targets.sdist]
+include = ["src/imlite", "tests", "docs", "README.md", "CHANGELOG.md", "LICENSE", "mkdocs.yml"]
+
 # ---------------------------------------------------------------------------
 # Ruff - linting + formatting
 # ---------------------------------------------------------------------------
 [tool.ruff]
 src = ["src", "tests"]
 line-length = 100
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = [
@@ -75,13 +93,31 @@ select = [
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
     "RUF", # ruff-specific
+    "PL",  # pylint
+    "SIM", # flake8-simplify
+    "D",   # pydocstyle - every public symbol is documented
 ]
 ignore = [
-    "E501",  # line too long - handled by formatter
+    "E501",    # line too long - handled by the formatter
+    "D105",    # magic methods do not need docstrings
+    "D107",    # __init__ is documented on the class
+    "D203",    # incompatible with D211
+    "D213",    # incompatible with D212
+    "PLC0415", # deferred imports are deliberate (circular-import + import-time cost)
+    "PLR0913", # image ops legitimately take many keyword arguments
+    "PLR0917", # ...and many of those read best positionally: pad(img, t, b, l, r)
+    "PLR2004", # 255, 3, 4 and 0 are the vocabulary of 8-bit images, not magic numbers
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+"examples/*" = ["D", "T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["imlite"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.format]
 quote-style = "double"
@@ -91,14 +127,15 @@ indent-style = "space"
 # Mypy - type checking
 # ---------------------------------------------------------------------------
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
-ignore_missing_imports = true
+warn_unused_ignores = true
+files = ["src/imlite"]
 
 [[tool.mypy.overrides]]
-module = ["cv2.*", "imageio.*", "tqdm.*"]
+module = ["imageio.*", "imageio_ffmpeg.*", "tqdm.*", "matplotlib.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
@@ -115,4 +152,4 @@ omit = ["src/imlite/_version.py"]
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 80
+fail_under = 85
