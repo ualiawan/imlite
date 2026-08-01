@@ -1,31 +1,86 @@
 """Path helpers, extension registries, and file-system utilities for imlite."""
 
-from __future__ import annotations
-
-import os
 import re
 from pathlib import Path
 
 __all__ = [
     "IMAGE_EXTENSIONS",
     "VIDEO_EXTENSIONS",
+    "ensure_dir",
     "is_image_file",
     "is_video_file",
     "sorted_frame_paths",
-    "ensure_dir",
-    "stem",
 ]
 
 # ---------------------------------------------------------------------------
 # Extension registries
 # ---------------------------------------------------------------------------
 
+# Kept deliberately broad. imageio refuses to open a file whose extension it
+# does not recognise, so an extension missing from these sets cannot be
+# recovered by sniffing the file's contents - it just fails.
 IMAGE_EXTENSIONS: frozenset[str] = frozenset(
-    {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp", ".ico", ".ppm", ".pgm"}
+    {
+        ".jpg",
+        ".jpeg",
+        ".jpe",
+        ".jfif",
+        ".png",
+        ".bmp",
+        ".dib",
+        ".tiff",
+        ".tif",
+        ".webp",
+        ".ico",
+        ".ppm",
+        ".pgm",
+        ".pbm",
+        ".pnm",
+        ".tga",
+        ".jp2",
+        ".j2k",
+        ".exr",
+        ".hdr",
+        ".pcx",
+        ".sgi",
+        ".im",
+        ".msp",
+        ".xbm",
+    }
 )
 
 VIDEO_EXTENSIONS: frozenset[str] = frozenset(
-    {".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".ts", ".gif"}
+    {
+        ".mp4",
+        ".m4v",
+        ".avi",
+        ".mov",
+        ".qt",
+        ".mkv",
+        ".webm",
+        ".wmv",
+        ".asf",
+        ".flv",
+        ".f4v",
+        ".ts",
+        ".mts",
+        ".m2ts",
+        ".mpg",
+        ".mpeg",
+        ".m1v",
+        ".m2v",
+        ".mpv",
+        ".3gp",
+        ".3g2",
+        ".ogv",
+        ".ogg",
+        ".vob",
+        ".divx",
+        ".mxf",
+        ".rm",
+        ".rmvb",
+        ".gif",
+    }
 )
 
 
@@ -111,45 +166,3 @@ def ensure_dir(path: str | Path) -> Path:
     p = Path(path)
     p.mkdir(parents=True, exist_ok=True)
     return p
-
-
-def stem(path: str | Path) -> str:
-    """Return the filename without its extension.
-
-    Args:
-        path: Any file path.
-
-    Returns:
-        The stem (e.g. ``"photo"`` from ``"/some/dir/photo.jpg"``).
-    """
-    return Path(path).stem
-
-
-def resolve(path: str | Path) -> str:
-    """Return the absolute, resolved string path.
-
-    Args:
-        path: Any file path.
-
-    Returns:
-        Absolute path as a string.
-    """
-    return str(Path(path).resolve())
-
-
-def file_size_bytes(path: str | Path) -> int:
-    """Return the size of *path* in bytes.
-
-    Args:
-        path: Path to an existing file.
-
-    Returns:
-        File size in bytes.
-
-    Raises:
-        FileNotFoundError: If the file does not exist.
-    """
-    p = Path(path)
-    if not p.is_file():
-        raise FileNotFoundError(f"File not found: {p}")
-    return os.path.getsize(p)

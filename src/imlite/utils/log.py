@@ -11,16 +11,14 @@ Public helpers (re-exported from ``imlite.__init__``):
     set_progress(enabled) - globally enable/disable all tqdm progress bars
 """
 
-from __future__ import annotations
-
 import logging
 import sys
 from collections.abc import Iterator
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from tqdm import tqdm
 
-__all__ = ["get_logger", "set_verbosity", "set_progress", "progress"]
+__all__ = ["get_logger", "progress", "set_progress", "set_verbosity"]
 
 # ---------------------------------------------------------------------------
 # The one logger for the whole library
@@ -29,6 +27,16 @@ logger = logging.getLogger("imlite")
 
 # A sentinel level above CRITICAL - used for "SILENT" mode.
 _SILENT_LEVEL = logging.CRITICAL + 1
+
+# Explicit table rather than getattr(logging, name): it keeps the accepted
+# names a closed, documented set instead of anything in the logging module.
+_LEVEL_NAMES: dict[str, int] = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
 
 # Module-level flag controlling all progress bars.
 _show_progress: bool = True
@@ -74,15 +82,14 @@ def set_verbosity(level: int | str) -> None:
         upper = level.upper()
         if upper == "SILENT":
             numeric = _SILENT_LEVEL
+        elif upper in _LEVEL_NAMES:
+            numeric = _LEVEL_NAMES[upper]
         else:
-            numeric = getattr(logging, upper, None)
-            if numeric is None:
-                raise ValueError(
-                    f"Unknown log level {level!r}. "
-                    "Use 'DEBUG', 'INFO', 'WARNING', 'ERROR', or 'SILENT'."
-                )
+            raise ValueError(
+                f"Unknown log level {level!r}. Use one of {[*_LEVEL_NAMES, 'SILENT']}."
+            )
     else:
-        numeric = level
+        numeric = int(level)
 
     logger.setLevel(numeric)
 
@@ -106,7 +113,7 @@ def set_progress(enabled: bool) -> None:
         >>> import imlite
         >>> imlite.set_progress(False)   # no tqdm output anywhere in imlite
     """
-    global _show_progress
+    global _show_progress  # noqa: PLW0603 - one process-wide switch is the point
     _show_progress = enabled
 
 
@@ -139,4 +146,7 @@ def progress(
     """
     if not (_show_progress and show):
         return iter(iterable)
-    return tqdm(iterable, desc=desc, total=total, unit=unit, dynamic_ncols=True)
+    return cast(
+        "Iterator[Any]",
+        tqdm(iterable, desc=desc, total=total, unit=unit, dynamic_ncols=True),
+    )

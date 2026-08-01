@@ -1,1 +1,1 @@
-"""Utility sub-package for imlite"""
+"""Internal helpers: paths, logging, dtype normalisation, Pillow bridge, ffmpeg discovery."""
