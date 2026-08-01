@@ -1,31 +1,37 @@
+# Mirrors the CI gate in .github/workflows/ci.yml: ruff (lint + format) and
+# mypy --strict. Black, isort and flake8 were removed - ruff replaces all three
+# and is configured in pyproject.toml, so having both meant two sources of truth.
+#
+#   pip install pre-commit && pre-commit install
+#   pre-commit run --all-files
+
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks.git
-    rev: v4.0.1
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
     hooks:
-    -   id: trailing-whitespace
-    -   id: check-yaml
-    # -   id: check-json
-    # -   id: check-docstring-first
-    -   id: requirements-txt-fixer
-    -   id: debug-statements
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=512"]
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
 
-
--   repo: https://github.com/psf/black
-    rev: 23.1.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.1
     hooks:
-    -   id: black
-        args: ["--line-length=100"]
+      - id: ruff-check
+        args: ["--fix"]
+      - id: ruff-format
 
--   repo: https://github.com/pycqa/isort
-    rev: 5.11.5
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.0
     hooks:
-    -   id: isort
-        name: isort
-        args: ["--profile=black"]
-
--   repo: https://github.com/PyCQA/flake8
-    rev: 5.0.4
-    hooks:
-    -   id: flake8
-        args: ['--max-line-length=200', '--extend-ignore=E203,E231', '--min-python-version=3.9']
-        additional_dependencies: [flake8-typing-imports==1.10.0]
+      - id: mypy
+        files: ^src/imlite/
+        additional_dependencies:
+          - numpy>=1.23
+          - types-tqdm

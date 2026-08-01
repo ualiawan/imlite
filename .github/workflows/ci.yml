@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: "1"
+
+jobs:
+  lint:
+    name: Lint and type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - name: Install
+        run: uv pip install --system -e ".[dev,docs,show]"
+      - name: ruff check
+        run: ruff check src tests examples
+      - name: ruff format
+        run: ruff format --check src tests examples
+      - name: mypy --strict
+        run: mypy
+
+  test:
+    name: Test ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv python install ${{ matrix.python-version }}
+      - name: Install
+        run: uv pip install --system -e ".[dev]"
+
+      # The whole point of the dependency set: video works from a plain pip
+      # install, with no apt-get/brew/choco step anywhere in this workflow.
+      - name: Verify bundled ffmpeg
+        run: imlite doctor
+
+      - name: Verify OpenCV is absent
+        shell: python
+        run: |
+          import importlib.util, sys
+          if importlib.util.find_spec("cv2") is not None:
+              sys.exit("cv2 is installed - imlite must not depend on OpenCV")
+          print("no OpenCV, as intended")
+
+      - name: pytest
+        run: pytest --cov --cov-report=term-missing
+
+  docs:
+    name: Build docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - name: Install
+        run: uv pip install --system -e ".[docs]"
+      - name: mkdocs build --strict
+        run: mkdocs build --strict
+
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - run: uv build
+      - name: Check metadata
+        run: uvx twine check dist/*
+
+      # A wheel that forgets py.typed silently downgrades every downstream
+      # user's type checking, and the failure is invisible without this check.
+      - name: Verify py.typed ships in the wheel
+        run: |
+          python -m zipfile -l dist/*.whl | grep -q 'imlite/py.typed' \
+            || { echo "py.typed missing from wheel"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

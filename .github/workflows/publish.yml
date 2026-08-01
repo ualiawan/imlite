@@ -1,0 +1,70 @@
+name: Publish
+
+# Publishes to PyPI when a version tag is pushed:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# Authentication uses PyPI Trusted Publishing (OIDC), so there is no API token
+# in repository secrets. One-time setup at https://pypi.org/manage/account/publishing/:
+#   owner ualiawan | repo imlite | workflow publish.yml | environment pypi
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Check the tag matches _version.py
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(grep -oP '__version__\s*=\s*"\K[^"]+' src/imlite/_version.py)
+          if [ "$tag" != "$pkg" ]; then
+            echo "Tag $tag does not match __version__ $pkg"
+            exit 1
+          fi
+          echo "Publishing version $pkg"
+
+      - run: uv build
+      - run: uvx twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: pypi
+      url: https://pypi.org/p/imlite
+    permissions:
+      id-token: write # required for Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  docs:
+    name: Deploy docs to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: publish
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+      - run: uv python install 3.12
+      - run: uv pip install --system -e ".[docs]"
+      - run: mkdocs gh-deploy --force
