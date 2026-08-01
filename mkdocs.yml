@@ -1,0 +1,99 @@
+site_name: imlite
+site_description: Lightweight image and video processing for Python - one-liners and chainable syntax.
+site_author: ualiawan
+site_url: https://ualiawan.github.io/imlite/
+repo_url: https://github.com/ualiawan/imlite
+repo_name: ualiawan/imlite
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_category_heading: true
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+            merge_init_into_class: true
+            filters: ["!^_"]
+
+nav:
+  - Home: index.md
+  - Quick Start: quickstart.md
+  - User Guide:
+      - Installation: guides/install.md
+      - Command Line: guides/cli.md
+      - Reading & Writing: guides/io.md
+      - Geometry Operations: guides/geometry.md
+      - Colour Operations: guides/color.md
+      - Video & Frames: guides/video.md
+      - Chaining Syntax: guides/chaining.md
+      - Pixel dtypes: guides/dtypes.md
+      - Logging & Progress Bars: guides/logging.md
+      - Limitations: guides/limitations.md
+  - API Reference:
+      - imlite (top-level): api/index.md
+      - Image: api/image.md
+      - Video: api/video.md
+      - FrameSequence: api/sequence.md
+      - Geometry ops: api/geometry.md
+      - Pixel ops: api/enhance.md
+      - Colour ops: api/color.md
+      - I/O ops: api/io.md
+      - Utilities: api/utils.md
+      - Command line: api/cli.md
+      - Exceptions: api/exceptions.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path: ["."]
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+watch:
+  - src/imlite
+  - CHANGELOG.md
