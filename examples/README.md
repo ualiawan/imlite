@@ -4,7 +4,7 @@ Runnable scripts. Each one is self-contained and generates whatever media it
 needs, so nothing here depends on files that are not in the repository.
 
 ```bash
-pip install imlite
+pip install py-imlite
 python examples/01_image_pipeline.py
 ```
 

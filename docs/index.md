@@ -2,14 +2,14 @@
 
 **Lightweight image and video processing for Python - one-liners and chainable syntax.**
 
-[![PyPI](https://img.shields.io/pypi/v/imlite)](https://pypi.org/project/imlite/)
-[![Python](https://img.shields.io/pypi/pyversions/imlite)](https://pypi.org/project/imlite/)
+[![PyPI](https://img.shields.io/pypi/v/py-imlite)](https://pypi.org/project/py-imlite/)
+[![Python](https://img.shields.io/pypi/pyversions/py-imlite)](https://pypi.org/project/py-imlite/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
 ```bash
-pip install imlite
+pip install py-imlite      # the import name is just `imlite`
 ```
 
 That is the whole setup. **No OpenCV, no system ffmpeg.** Video works immediately

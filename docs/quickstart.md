@@ -1,7 +1,7 @@
 # Quick Start
 
 ```bash
-pip install imlite
+pip install py-imlite
 ```
 
 Nothing else. Check that video support came along for the ride:

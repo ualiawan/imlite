@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "imlite"
+name = "py-imlite"
 dynamic = ["version"]
 description = "Lightweight Python library for image and video processing - one-liners for everyday CV workflows."
 readme = "README.md"

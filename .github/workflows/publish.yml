@@ -6,7 +6,8 @@ name: Publish
 #
 # Authentication uses PyPI Trusted Publishing (OIDC), so there is no API token
 # in repository secrets. One-time setup at https://pypi.org/manage/account/publishing/:
-#   owner ualiawan | repo imlite | workflow publish.yml | environment pypi
+#   PyPI project py-imlite | owner ualiawan | repo imlite
+#   workflow publish.yml   | environment pypi
 
 on:
   push:
@@ -44,7 +45,7 @@ jobs:
     needs: build
     environment:
       name: pypi
-      url: https://pypi.org/p/imlite
+      url: https://pypi.org/p/py-imlite
     permissions:
       id-token: write # required for Trusted Publishing
     steps:

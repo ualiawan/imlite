@@ -47,7 +47,7 @@ offsets for LAB. All five spaces round-trip through an RGB hub.
   (~246 MB down to ~128 MB) at no cost. It also lifts the `numpy>=2` pin that
   OpenCV 5 imposed, so numpy 1.x works again.
 - Video uses the static ffmpeg binary bundled in the `imageio-ffmpeg` wheel.
-  `pip install imlite` is the entire setup on Linux, macOS and Windows.
+  `pip install py-imlite` is the entire setup on Linux, macOS and Windows.
 - New `imlite.ffmpeg_info()` and `imlite doctor` report the resolved binary and
   its origin. On a platform with no bundled build, `ImliteFFmpegError` names the
   right package-manager command and the `IMAGEIO_FFMPEG_EXE` override, rather

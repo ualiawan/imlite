@@ -1,8 +1,18 @@
 # Installation
 
 ```bash
-pip install imlite
+pip install py-imlite
 ```
+
+```python
+import imlite            # note: the import name has no `py-` prefix
+```
+
+The distribution is called `py-imlite` because PyPI reserves `imlite`: it
+normalises names by folding `i` and `l` together, which makes it collide with
+the unrelated `lmlite` project. The import name, the CLI and every symbol are
+unaffected. This split is common - `pillow` imports as `PIL`, `beautifulsoup4`
+as `bs4`, `scikit-learn` as `sklearn`.
 
 That is the whole thing. Video works immediately - **there is no system ffmpeg to
 install and no OpenCV to compile**.
@@ -44,9 +54,9 @@ Paste that output into any bug report and half the diagnosis is already done.
 ## Optional extras
 
 ```bash
-pip install "imlite[show]"   # matplotlib, for Image.show() figures
-pip install "imlite[dev]"    # pytest, ruff, mypy, pre-commit
-pip install "imlite[docs]"   # mkdocs and friends
+pip install "py-imlite[show]"   # matplotlib, for Image.show() figures
+pip install "py-imlite[dev]"    # pytest, ruff, mypy, pre-commit
+pip install "py-imlite[docs]"   # mkdocs and friends
 ```
 
 `Image.show()` works without the `show` extra - it falls back to Pillow's viewer.
