@@ -11,7 +11,7 @@
 pip install py-imlite      # the import name is just `imlite`
 ```
 
-**No OpenCV. No system ffmpeg.** 
+**No OpenCV. No system ffmpeg.**
 
 ---
 
@@ -75,9 +75,10 @@ imlite convert photo.png thumb.jpg --resize 320x --gray
 Colour conversions reproduce OpenCV's 8-bit encodings exactly (BT.601 luma, hue
 in 0-179, `L*255/100`), so thresholds written against `cv2` keep working.
 
+## Backends
 
-Video uses the static ffmpeg binary bundled inside the `imageio-ffmpeg` wheel.
-Check yours any time:
+Pixel work is numpy and Pillow. Video uses the static ffmpeg binary bundled
+inside the `imageio-ffmpeg` wheel. Check yours any time:
 
 ```console
 $ imlite doctor
