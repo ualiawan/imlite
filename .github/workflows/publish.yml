@@ -2,7 +2,13 @@ name: Publish
 
 # Publishes to PyPI when a version tag is pushed:
 #
-#   git tag v0.1.0 && git push origin v0.1.0
+#   git tag -a v0.1.0 -m "imlite 0.1.0" && git push origin v0.1.0
+#
+# A tag push is the only trigger. There is deliberately no workflow_dispatch:
+# the version comes from the tag, so a manual run has nothing to release, and
+# releasing by hand is exactly the thing that publishes the wrong version.
+# Docs deploy separately, in docs.yml, so a documentation fix does not need a
+# release to go live.
 #
 # Authentication uses PyPI Trusted Publishing (OIDC), so there is no API token
 # in repository secrets. One-time setup at https://pypi.org/manage/account/publishing/:
@@ -12,7 +18,6 @@ name: Publish
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
 
 jobs:
   build:
@@ -22,18 +27,28 @@ jobs:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v7
 
+      # A PyPI version can never be re-uploaded, so a tag that disagrees with
+      # the package must stop here rather than burn the version number.
       - name: Check the tag matches _version.py
         run: |
           tag="${GITHUB_REF_NAME#v}"
           pkg=$(grep -oP '__version__\s*=\s*"\K[^"]+' src/imlite/_version.py)
           if [ "$tag" != "$pkg" ]; then
-            echo "Tag $tag does not match __version__ $pkg"
+            echo "::error::Tag $tag does not match __version__ $pkg in src/imlite/_version.py"
             exit 1
           fi
           echo "Publishing version $pkg"
 
       - run: uv build
       - run: uvx twine check dist/*
+
+      # Losing py.typed silently downgrades type checking for every downstream
+      # user, and nothing else would notice.
+      - name: Verify py.typed ships in the wheel
+        run: |
+          python -m zipfile -l dist/*.whl | grep -q 'imlite/py.typed' \
+            || { echo "::error::py.typed missing from the wheel"; exit 1; }
+
       - uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -54,18 +69,3 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
-
-  docs:
-    name: Deploy docs to GitHub Pages
-    runs-on: ubuntu-latest
-    needs: publish
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@v7
-      - run: uv python install 3.12
-      - run: uv pip install --system -e ".[docs]"
-      - run: mkdocs gh-deploy --force

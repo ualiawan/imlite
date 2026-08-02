@@ -1,0 +1,46 @@
+name: Docs
+
+# Redeploys https://ualiawan.github.io/imlite/ whenever main changes.
+#
+# Deliberately separate from publish.yml: docs used to deploy only as the last
+# job of a release, which meant a typo fix sat unpublished until the next
+# version. Documentation should never wait for a release.
+#
+# src/imlite is a trigger path because mkdocstrings renders the API reference
+# straight from the docstrings, and CHANGELOG.md because docs/changelog.md
+# pulls it in with the snippets extension.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "src/imlite/**"
+      - "mkdocs.yml"
+      - "CHANGELOG.md"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+# gh-deploy force-pushes gh-pages, so overlapping runs would race.
+concurrency:
+  group: docs
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # gh-deploy pushes the gh-pages branch
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # gh-deploy needs the gh-pages history
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - name: Install
+        run: uv pip install --system -e ".[docs]"
+      - name: Deploy to gh-pages
+        run: mkdocs gh-deploy --force
