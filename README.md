@@ -2,8 +2,8 @@
 
 **Image and video processing for Python, without the boilerplate.**
 
-[![PyPI](https://img.shields.io/pypi/v/py-imlite)](https://pypi.org/project/py-imlite/)
-[![Python](https://img.shields.io/pypi/pyversions/py-imlite)](https://pypi.org/project/py-imlite/)
+[![PyPI](https://img.shields.io/pypi/v/py-imlite?cacheSeconds=3600)](https://pypi.org/project/py-imlite/)
+[![Python](https://img.shields.io/pypi/pyversions/py-imlite?cacheSeconds=3600)](https://pypi.org/project/py-imlite/)
 [![CI](https://github.com/ualiawan/imlite/actions/workflows/ci.yml/badge.svg)](https://github.com/ualiawan/imlite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 

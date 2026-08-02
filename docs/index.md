@@ -2,8 +2,8 @@
 
 **Lightweight image and video processing for Python - one-liners and chainable syntax.**
 
-[![PyPI](https://img.shields.io/pypi/v/py-imlite)](https://pypi.org/project/py-imlite/)
-[![Python](https://img.shields.io/pypi/pyversions/py-imlite)](https://pypi.org/project/py-imlite/)
+[![PyPI](https://img.shields.io/pypi/v/py-imlite?cacheSeconds=3600)](https://pypi.org/project/py-imlite/)
+[![Python](https://img.shields.io/pypi/pyversions/py-imlite?cacheSeconds=3600)](https://pypi.org/project/py-imlite/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 ---
