@@ -11,8 +11,7 @@
 pip install py-imlite      # the import name is just `imlite`
 ```
 
-**No OpenCV. No system ffmpeg.** Video works out of the box on Linux, macOS and
-Windows.
+**No OpenCV. No system ffmpeg.** 
 
 ---
 
@@ -76,16 +75,6 @@ imlite convert photo.png thumb.jpg --resize 320x --gray
 Colour conversions reproduce OpenCV's 8-bit encodings exactly (BT.601 luma, hue
 in 0-179, `L*255/100`), so thresholds written against `cv2` keep working.
 
-## Why no OpenCV
-
-|  | Before | Now |
-|---|---:|---:|
-| Install size | ~246 MB | **~127 MB** |
-| numpy 1.x supported | No (`opencv` 5 pins `numpy>=2`) | Yes |
-
-OpenCV was 48% of the install and, once image I/O had moved to `imageio`, only
-five functions still used it. Pillow does the same work and was already a hard
-dependency of `imageio`, so removing OpenCV cost nothing.
 
 Video uses the static ffmpeg binary bundled inside the `imageio-ffmpeg` wheel.
 Check yours any time:
