@@ -19,13 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
       # 3.10 is the declared floor. Type-checking there pins both our own
       # 3.10 compatibility and the dependency versions a minimum-supported
       # user actually resolves.
-      - run: uv python install 3.10
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
       - name: Install
         run: uv pip install --system -e ".[dev,docs,show]"
       - name: ruff check
@@ -45,10 +47,12 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - run: uv python install ${{ matrix.python-version }}
       - name: Install
         run: uv pip install --system -e ".[dev]"
 
@@ -73,10 +77,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - run: uv python install 3.12
       - name: Install
         run: uv pip install --system -e ".[docs]"
       - name: mkdocs build --strict
@@ -88,6 +94,9 @@ jobs:
     needs: [lint, test]
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: astral-sh/setup-uv@v7
       - run: uv build
       - name: Check metadata
